@@ -410,6 +410,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                   {connectionStatus === 'success' && "✅ ALLT FUNGERAR!"}
                   {connectionStatus === 'error' && "❌ FEL PÅ NYCKELN"}
                 </button>
+
+                {/* NEW SECURITY TIP */}
+                {hasKey && (
+                  <p className="text-[10px] text-slate-400 leading-tight mt-2">
+                    🔒 För maximal säkerhet: Gå till Google Cloud Console och begränsa nyckeln till din webbplats-adress (Website Restrictions).
+                  </p>
+                )}
              </div>
           </div>
         </div>
