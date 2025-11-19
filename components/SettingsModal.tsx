@@ -53,7 +53,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
 
   // Key Source Info
   const keyDebug = getApiKeyDebug();
-  const keySource = getKeySource(); // 'MANUAL' | 'ENV_VITE' | 'ENV_LEGACY' | 'NONE'
+  const keySource = getKeySource(); // 'MANUAL' | 'ENV_VITE' | 'NONE'
   const isBlocked = isEnvKeyBlocked();
   const hasKey = keySource !== 'NONE';
 
@@ -293,7 +293,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                      <div className="text-[10px] text-slate-400 uppercase font-bold">KÄLLA</div>
                      {keySource === 'MANUAL' && <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded font-bold">MANUELL</span>}
                      {keySource === 'ENV_VITE' && <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded font-bold">ENV (VITE_) ✅</span>}
-                     {keySource === 'ENV_LEGACY' && <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded font-bold">ENV (GAMMAL) ⚠️</span>}
                      {keySource === 'NONE' && <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded font-bold">INGEN</span>}
                   </div>
                 </div>

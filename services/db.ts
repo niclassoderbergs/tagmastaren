@@ -1,3 +1,4 @@
+
 import { Question, Subject, FirebaseConfig } from '../types';
 import { initializeApp, FirebaseApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, Firestore, doc, setDoc, getDocs, collection, writeBatch, getCountFromServer } from 'firebase/firestore';
@@ -45,26 +46,27 @@ class TrainDB {
   private firestore: Firestore | null = null;
 
   constructor() {
-    // 1. Try Environment Variables (Vercel / .env.local)
-    // This is the secure way to load credentials.
-    const apiKey = process.env.VITE_FIREBASE_API_KEY;
-    const projectId = process.env.VITE_FIREBASE_PROJECT_ID;
+    // 1. Try Environment Variables via import.meta.env (Standard Vite approach)
+    // @ts-ignore
+    const env = (import.meta.env as any) || {};
+    
+    const apiKey = env.VITE_FIREBASE_API_KEY;
+    const projectId = env.VITE_FIREBASE_PROJECT_ID;
     
     if (apiKey && projectId) {
       const config: FirebaseConfig = {
         apiKey: apiKey,
-        authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || "",
+        authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || "",
         projectId: projectId,
-        storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || "",
-        messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
-        appId: process.env.VITE_FIREBASE_APP_ID || ""
+        storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || "",
+        messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
+        appId: env.VITE_FIREBASE_APP_ID || ""
       };
       this.initCloud(config);
       console.log("✅ Firebase config loaded from environment");
     } else {
       // 2. Fallback to empty config. 
-      // The user will need to enter keys manually in the Settings Modal or add .env.local
-      console.warn("⚠️ No Firebase config found in environment variables. Cloud sync disabled.");
+      console.warn("⚠️ No Firebase config found in environment variables (checking VITE_FIREBASE_...). Cloud sync disabled.");
       this.initCloud(DEFAULT_FIREBASE_CONFIG);
     }
   }

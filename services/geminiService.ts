@@ -22,16 +22,18 @@ const getCleanApiKey = () => {
 
   if (blockEnv) return "";
 
-  // 2. Try Standard Vite Environment Variable (Recommended)
-  // @ts-ignore - import.meta.env is standard in Vite
+  // 2. Try Standard Vite Environment Variable (Primary)
+  // @ts-ignore
   if (import.meta.env && import.meta.env.VITE_GOOGLE_AI_API_KEY) {
     // @ts-ignore
     return import.meta.env.VITE_GOOGLE_AI_API_KEY.trim();
   }
-
-  // 3. Fallback to Process Env (Legacy/Polyfilled)
-  if (process.env.GOOGLE_AI_API_KEY) {
-    return process.env.GOOGLE_AI_API_KEY.replace(/["']/g, "").trim();
+  
+  // Fallback alias (sometimes used)
+  // @ts-ignore
+  if (import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) {
+     // @ts-ignore
+    return import.meta.env.VITE_GEMINI_API_KEY.trim();
   }
 
   return "";
@@ -40,7 +42,7 @@ const getCleanApiKey = () => {
 let apiKey = getCleanApiKey();
 let ai = new GoogleGenAI({ apiKey: apiKey });
 
-export const getKeySource = (): 'MANUAL' | 'ENV_VITE' | 'ENV_LEGACY' | 'NONE' => {
+export const getKeySource = (): 'MANUAL' | 'ENV_VITE' | 'NONE' => {
   if (typeof window !== 'undefined') {
     const local = localStorage.getItem(STORAGE_KEY_API);
     if (local && local.length > 10) return 'MANUAL';
@@ -54,8 +56,7 @@ export const getKeySource = (): 'MANUAL' | 'ENV_VITE' | 'ENV_LEGACY' | 'NONE' =>
 
   if (!blockEnv) {
     // @ts-ignore
-    if (import.meta.env && import.meta.env.VITE_GOOGLE_AI_API_KEY) return 'ENV_VITE';
-    if (process.env.GOOGLE_AI_API_KEY && process.env.GOOGLE_AI_API_KEY.length > 5) return 'ENV_LEGACY';
+    if (import.meta.env && (import.meta.env.VITE_GOOGLE_AI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY)) return 'ENV_VITE';
   }
   
   return 'NONE';
@@ -616,7 +617,7 @@ export const generateQuestion = async (
   subject: Subject, 
   difficulty: number, 
   useDigits: boolean, 
-  currentCarCount: number,
+  currentCarCount: number, 
   previousType?: QuestionType
 ): Promise<Question> => {
   
