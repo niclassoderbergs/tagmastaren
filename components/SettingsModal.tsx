@@ -293,12 +293,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
           <div className="bg-orange-50 p-4 rounded-xl border-2 border-orange-100">
              <h3 className="font-bold text-orange-900 text-lg mb-2 border-b border-orange-200 pb-2">🔥 MOLN-KOPPLING (FIREBASE)</h3>
              <p className="text-xs text-orange-800 mb-4">
-               Spara frågor säkert i Googles moln.
+               Spara frågor säkert i Googles moln. Använd <code>.env.local</code> för att slippa skriva in nyckeln här.
              </p>
              
              {isEnvConnected ? (
                <div className="bg-white/50 p-2 rounded mb-4 text-center border border-orange-200">
-                 <span className="text-sm text-orange-800 font-bold">✅ ANSLUTEN TILL FIREBASE</span>
+                 <span className="text-sm text-orange-800 font-bold">✅ ANSLUTEN VIA .ENV FIL</span>
                </div>
              ) : (
                <div className="space-y-2 mb-4">
