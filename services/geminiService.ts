@@ -108,7 +108,6 @@ export const clearRuntimeApiKey = () => {
   apiKey = getCleanApiKey(); // Will revert to Env key if not blocked, or empty if blocked
   if (typeof window !== 'undefined') {
     localStorage.removeItem(STORAGE_KEY_API);
-    // Note: We do NOT clear the blockEnv setting here, that is separate
   }
   // Re-eval
   apiKey = getCleanApiKey();
@@ -156,69 +155,6 @@ const FALLBACK_QUESTIONS: Omit<Question, 'id'>[] = [
     explanation: "EN BUSS ÄR ETT FORDON, INTE ETT DJUR.",
     difficultyLevel: 1,
     visualSubject: "A yellow bus"
-  },
-  {
-    type: 'MULTIPLE_CHOICE',
-    text: "VAD RIMMAR PÅ 'HUS'?",
-    options: ["BIL", "MUS", "KATT", "TÅG"],
-    correctAnswerIndex: 1,
-    explanation: "HUS OCH MUS SLUTAR PÅ SAMMA LJUD.",
-    difficultyLevel: 1,
-    visualSubject: "A cute mouse"
-  },
-  {
-    type: 'MULTIPLE_CHOICE',
-    text: "VILKEN FORM HAR 3 HÖRN?",
-    options: ["CIRKEL", "KVADRAT", "TRIANGEL", "REKTANGEL"],
-    correctAnswerIndex: 2,
-    explanation: "TRIANGELN HAR TRE SIDOR OCH TRE HÖRN.",
-    difficultyLevel: 2,
-    visualSubject: "A green triangle shape"
-  },
-  {
-    type: 'MULTIPLE_CHOICE',
-    text: "MOTSATSEN TILL 'VARM' ÄR...?",
-    options: ["STARK", "GLAD", "KALL", "MJUK"],
-    correctAnswerIndex: 2,
-    explanation: "OM MAN INTE ÄR VARM SÅ ÄR MAN KALL.",
-    difficultyLevel: 1,
-    visualSubject: "Ice cubes and snow"
-  },
-  {
-    type: 'MULTIPLE_CHOICE',
-    text: "VAD ANVÄNDER EN FÅGEL FÖR ATT FLYGA?",
-    options: ["FENOR", "VINGAR", "HJUL", "ÖRON"],
-    correctAnswerIndex: 1,
-    explanation: "FÅGLAR VIFTAR MED VINGARNA FÖR ATT FLYGA.",
-    difficultyLevel: 1,
-    visualSubject: "A bird flying"
-  },
-  {
-    type: 'MULTIPLE_CHOICE',
-    text: "VILKET TAL ÄR STÖRST?",
-    options: ["2", "5", "9", "1"],
-    correctAnswerIndex: 2,
-    explanation: "9 ÄR DET HÖGSTA TALET I LISTAN.",
-    difficultyLevel: 1,
-    visualSubject: undefined
-  },
-  {
-    type: 'MULTIPLE_CHOICE',
-    text: "VILKET DJUR SÄGER MJAU?",
-    options: ["HUND", "KATT", "KO", "GRIS"],
-    correctAnswerIndex: 1,
-    explanation: "KATTEN SÄGER MJAU.",
-    difficultyLevel: 1,
-    visualSubject: "A cute cat"
-  },
-  {
-    type: 'MULTIPLE_CHOICE',
-    text: "VILKEN FÄRG FÅR DU OM DU BLANDAR RÖD OCH GUL?",
-    options: ["BLÅ", "GRÖN", "ORANGE", "LILA"],
-    correctAnswerIndex: 2,
-    explanation: "RÖD OCH GUL TILLSAMMANS BLIR ORANGE.",
-    difficultyLevel: 2,
-    visualSubject: "Orange paint bucket"
   }
 ];
 
@@ -241,8 +177,7 @@ const questionSchema: Schema = {
   required: ["questionText", "options", "correctAnswerIndex", "explanation"],
 };
 
-// Expanded topics to avoid repetition of "Heart", "Ice", "Plants", "Wheels"
-// UPDATED: Removed visual counting prompts to prevent "How many X do you see?" questions without matching images.
+// Expanded topics to avoid repetition
 const SUB_TOPICS: Record<Subject, string[]> = {
   [Subject.MATH]: [
     "RÄKNA ANTAL (Textbaserat: 'Lisa har 2 äpplen och får 3 till...')",
@@ -296,16 +231,12 @@ const SUB_TOPICS: Record<Subject, string[]> = {
 };
 
 const generateDragDropQuestion = (difficulty: number): Question => {
-  // Expanded to include "Bistro/Table setting" themes for variety
   const items = [
-    // Train Cargo Theme
     { emoji: '🐮', name: 'KOSSOR', container: 'BOSKAPSVAGNEN', source: 'LASTKAJEN', verb: 'LASTA PÅ' },
     { emoji: '📦', name: 'LÅDOR', container: 'GODSVAGNEN', source: 'LASTKAJEN', verb: 'LASTA PÅ' },
     { emoji: '🪵', name: 'TIMMER', container: 'TIMMERVAGNEN', source: 'LASTKAJEN', verb: 'LASTA PÅ' },
     { emoji: '🧳', name: 'VÄSKOR', container: 'PASSAGERARVAGNEN', source: 'PERRONGEN', verb: 'LASTA PÅ' },
     { emoji: '⚙️', name: 'KUGGHJUL', container: 'VERKSTADSVAGNEN', source: 'VERKSTADEN', verb: 'LÄMNA' },
-    
-    // Bistro / Dining Theme (New variety)
     { emoji: '🍽️', name: 'TALLRIKAR', container: 'BISTRO-BORDET', source: 'KÖKSLUCKAN', verb: 'DUKA FRAM' },
     { emoji: '🥤', name: 'MUGGAR', container: 'BORDET', source: 'DISKEN', verb: 'STÄLL FRAM' },
     { emoji: '🥄', name: 'SKEDAR', container: 'BORDET', source: 'LÅDAN', verb: 'DUKA FRAM' },
@@ -338,21 +269,13 @@ const generateDragDropQuestion = (difficulty: number): Question => {
 
 export const testApiKey = async (): Promise<{ success: boolean; message?: string }> => {
   try {
-    if (!apiKey) {
-      return { success: false, message: "Ingen nyckel laddad." };
-    }
-
+    if (!apiKey) return { success: false, message: "Ingen nyckel laddad." };
     await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: { parts: [{ text: 'Test' }] },
     });
     return { success: true };
   } catch (error: any) {
-    console.warn("API Key Test Failed:", error);
-    const msg = error.message || String(error);
-    if (msg.includes('expired') || msg.includes('API_KEY_INVALID')) {
-        return { success: false, message: "Din API-nyckel har gått ut eller är felaktig." };
-    }
     return { success: false, message: error.message || "Okänt fel vid anslutning" };
   }
 };
@@ -392,10 +315,7 @@ export const playTextAsSpeech = async (text: string): Promise<void> => {
   if (!audioContext) {
     audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
   }
-
-  if (audioContext.state === 'suspended') {
-    await audioContext.resume();
-  }
+  if (audioContext.state === 'suspended') await audioContext.resume();
 
   try {
     const response = await ai.models.generateContent({
@@ -412,7 +332,6 @@ export const playTextAsSpeech = async (text: string): Promise<void> => {
     });
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    
     if (base64Audio) {
        const audioBuffer = await decodeAudioData(
         decode(base64Audio),
@@ -420,7 +339,6 @@ export const playTextAsSpeech = async (text: string): Promise<void> => {
         24000,
         1
       );
-      
       const source = audioContext.createBufferSource();
       source.buffer = audioBuffer;
       source.connect(audioContext.destination);
@@ -460,15 +378,9 @@ export const generateRewardImage = async (prompt: string): Promise<string | null
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
-        parts: [
-          {
-             text: `Cute, cartoon style, child friendly illustration of: ${prompt}. White background, clear lines, colorful. High quality, detailed.`
-          }
-        ]
+        parts: [{ text: `Cute, cartoon style, child friendly illustration of: ${prompt}. White background, clear lines, colorful. High quality, detailed.` }]
       },
-      config: {
-        responseModalities: [Modality.IMAGE],
-      },
+      config: { responseModalities: [Modality.IMAGE] },
     });
     
     const part = response.candidates?.[0]?.content?.parts?.[0];
@@ -524,7 +436,6 @@ const fetchFromAIAndSave = async (
       break;
   }
 
-  // Construct Ban List String
   let banInstruction = "";
   if (bannedTopics && bannedTopics.length > 0) {
       banInstruction = `- UNDVIK DESSA ÄMNEN HELT (De förekommer för ofta): ${bannedTopics.join(', ')}.`;
@@ -543,11 +454,8 @@ const fetchFromAIAndSave = async (
        - Fråga ALDRIG hur många vagnar tåget har.
        - Fråga ALDRIG frågor som "Hur många X ser du på bilden?".
        - Frågorna SKA kunna besvaras med bara texten/logiken. Bilden är bara dekoration.
-       - Var kreativ! Använd oväntade teman som robotar, djuphavet, djungeln, instrument, sport.
     
     JSON format required.
-    VisualSubject: English description for an image if concrete object, else null.
-    Context: ${promptContext}
   `;
 
   const response = await ai.models.generateContent({
@@ -556,7 +464,7 @@ const fetchFromAIAndSave = async (
     config: {
       responseMimeType: "application/json",
       responseSchema: questionSchema,
-      temperature: 1.1, // High temperature for maximum variety
+      temperature: 1.1, 
     },
   });
 
@@ -594,16 +502,20 @@ export const batchGenerateQuestions = async (
   difficulties: Record<Subject, number>,
   bannedTopics: string[],
   onProgress: (completed: number) => void,
-  onError?: (errorMsg: string) => void
+  onError?: (errorMsg: string) => void,
+  targetSubject?: Subject,      // NEW: Optional specific subject
+  targetDifficulty?: number     // NEW: Optional specific difficulty override
 ): Promise<void> => {
-  const subjects = [Subject.MATH, Subject.LANGUAGE, Subject.LOGIC, Subject.PHYSICS];
+  
+  // If targets are provided, we only use them. Otherwise we cycle through all subjects
+  const subjects = targetSubject ? [targetSubject] : [Subject.MATH, Subject.LANGUAGE, Subject.LOGIC, Subject.PHYSICS];
   
   for (let i = 0; i < count; i++) {
     try {
       if (i > 0) await delay(5000);
 
       const subject = subjects[i % subjects.length];
-      const difficulty = difficulties[subject];
+      const difficulty = targetDifficulty || difficulties[subject]; // Use override if present
       const subTopics = SUB_TOPICS[subject];
       const specificFocus = subTopics[Math.floor(Math.random() * subTopics.length)];
       
@@ -617,12 +529,6 @@ export const batchGenerateQuestions = async (
          if (onError) onError(`Kvot överskriden (429). Vänta en stund. Detaljer: ${msg}`);
          break; 
       }
-      
-      if (msg.includes('expired') || msg.includes('API_KEY_INVALID')) {
-         if (onError) onError(`DIN API-NYCKEL HAR GÅTT UT.`);
-         break;
-      }
-      
       if (onError) onError(`Fel vid fråga ${i+1}: ${msg.substring(0, 80)}...`);
     }
   }
@@ -640,8 +546,7 @@ export const batchGenerateImages = async (
           await generateRewardImage(prompt);
           onProgress(i + 1);
       } catch (e: any) {
-          console.error("Image batch gen failed", e);
-          if (onError) onError(e.message || "Fel vid bildgenerering");
+          if (onError) onError(e.message);
       }
   }
 };
@@ -661,24 +566,25 @@ export const generateQuestion = async (
   }
 
   try {
-    const dbCount = await trainDb.getQuestionCount(subject);
+    // Check counts specific to this Difficulty Level
+    const dbCount = await trainDb.getQuestionCount(subject, difficulty);
     
     let aiProbability = 0;
     if (dbCount < 50) {
-      aiProbability = 1.0; 
+      aiProbability = 1.0; // Always gen new if low on this level
     } else if (dbCount < 100) {
-      aiProbability = 0.2;
+      aiProbability = 0.2; // 20% chance of new
     } else if (dbCount < 200) {
-      aiProbability = 0.1;
+      aiProbability = 0.1; // 10% chance of new
     } else {
-      aiProbability = 0.05;
+      aiProbability = 0.05; // 5% chance of new
     }
 
     const rollDice = Math.random(); 
     const forceAI = rollDice < aiProbability;
 
     if (!forceAI) {
-      const dbQuestion = await trainDb.getRandomQuestion(subject);
+      const dbQuestion = await trainDb.getRandomQuestion(subject, difficulty);
       if (dbQuestion) {
         return { ...dbQuestion, id: crypto.randomUUID() };
       }
@@ -693,7 +599,7 @@ export const generateQuestion = async (
     console.error("Error in generateQuestion:", error);
     
     try {
-      const rescueQuestion = await trainDb.getRandomQuestion(subject);
+      const rescueQuestion = await trainDb.getRandomQuestion(subject); // Any difficulty backup
       if (rescueQuestion) {
         return { ...rescueQuestion, id: crypto.randomUUID() };
       }
@@ -712,10 +618,9 @@ export const generateQuestion = async (
 
 // --- AI DEDUPLICATION ---
 
-export const checkDuplicatesWithAI = async (questions: {id: string, text: string}[], subject: string): Promise<string[]> => {
+export const checkDuplicatesWithAI = async (questions: {id: string, text: string}[], context: string): Promise<string[]> => {
   if (questions.length < 2) return [];
 
-  // Schema for the output: list of IDs to delete
   const duplicateSchema: Schema = {
     type: Type.OBJECT,
     properties: {
@@ -729,23 +634,15 @@ export const checkDuplicatesWithAI = async (questions: {id: string, text: string
 
   const prompt = `
     Du är en expert på att städa databaser för barn-appar.
-    Här är en lista med frågor inom ämnet: ${subject}.
+    Här är en lista med frågor inom: ${context}.
     Hitta dubbletter.
     
-    REGLER FÖR ATT MARKERA EN FRÅGA SOM DUBBLETT (TA BORT):
+    REGLER:
     1. SEMANTISK LIKHET: Om två frågor frågar om samma faktakunskap, ta bort den ena.
-       Exempel: "Vad händer vid 0 grader?" och "När fryser vatten?" -> DUBBLETT. Ta bort den som är sämst formulerad.
-    
-    2. MATEMATIK-REGEL (STRIKT):
-       Om siffrorna skiljer sig åt är det INTE en dublett.
-       "Vad är 1+1?" och "Vad är 2+2?" är INTE dubbletter. Behåll båda.
-       "Vad är 1+1?" och "1 plus 1 blir?" -> DUBBLETT.
+    2. MATEMATIK: Om siffrorna skiljer sig åt är det INTE en dublett. (1+1 vs 2+2 = OK).
+    3. STAVFEL: Ta bort felstavade varianter.
 
-    3. STAVFEL:
-       Om en fråga ser ut att vara en felstavad version av en annan ("Vad häner" vs "Vad händer"), ta bort den felstavade.
-
-    Returnera en lista med IDs på de frågor som ska raderas. Behåll originalet.
-
+    Returnera IDs att radera.
     INPUT JSON:
     ${JSON.stringify(questions)}
   `;
@@ -757,7 +654,7 @@ export const checkDuplicatesWithAI = async (questions: {id: string, text: string
       config: {
         responseMimeType: "application/json",
         responseSchema: duplicateSchema,
-        temperature: 0, // Low temp for strict logical analysis
+        temperature: 0, 
       },
     });
     

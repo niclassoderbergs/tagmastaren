@@ -59,3 +59,17 @@ export interface AppSettings {
   enableBannedTopics: boolean; // Toggle for the ban list
   bannedTopics: string[]; // List of topics to exclude from AI generation
 }
+
+export interface LevelStats {
+  total: number;
+  byLevel: Record<number, number>; // 1: count, 2: count...
+}
+
+export interface DbStats {
+  math: LevelStats;
+  language: LevelStats;
+  logic: LevelStats;
+  physics: LevelStats;
+  imageCount: number;
+  totalQuestions: number;
+}

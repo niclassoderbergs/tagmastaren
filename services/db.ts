@@ -1,7 +1,7 @@
 
-import { Question, Subject, FirebaseConfig } from '../types';
+import { Question, Subject, FirebaseConfig, DbStats, LevelStats } from '../types';
 import { initializeApp, FirebaseApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, Firestore, doc, setDoc, getDocs, collection, writeBatch, getCountFromServer, deleteDoc } from 'firebase/firestore';
+import { getFirestore, Firestore, doc, setDoc, getDocs, collection, writeBatch, getCountFromServer, deleteDoc, query, where } from 'firebase/firestore';
 import { checkDuplicatesWithAI } from './geminiService';
 
 const DB_NAME = 'TrainMasterDB';
@@ -32,14 +32,6 @@ interface BackupData {
   images: ImageRecord[];
   timestamp: number;
   version: number;
-}
-
-export interface DbStats {
-  mathCount: number;
-  languageCount: number;
-  logicCount: number;
-  physicsCount: number;
-  imageCount: number;
 }
 
 export interface CloudStats {
@@ -222,9 +214,6 @@ class TrainDB {
         if (!db.objectStoreNames.contains(STORE_IMAGES)) {
           const iStore = db.createObjectStore(STORE_IMAGES, { keyPath: 'prompt' });
           iStore.createIndex('timestamp', 'timestamp', { unique: false });
-        } else {
-           // Migration for existing DBs if they lack index (simple fallback)
-           // In a prod app we would handle versioning carefully
         }
       };
     });
@@ -284,15 +273,23 @@ class TrainDB {
     }
   }
 
-  async getQuestionCount(subject: Subject): Promise<number> {
+  async getQuestionCount(subject: Subject, difficulty?: number): Promise<number> {
     const db = await this.open();
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const transaction = db.transaction([STORE_QUESTIONS], 'readonly');
       const store = transaction.objectStore(STORE_QUESTIONS);
       const index = store.index('subject');
-      const request = index.count(subject);
+      const request = index.getAll(subject); // Get all to filter by difficulty in memory (fast enough)
 
-      request.onsuccess = () => resolve(request.result);
+      request.onsuccess = () => {
+        const allSubjectQuestions = request.result as Question[];
+        if (difficulty) {
+           const filtered = allSubjectQuestions.filter(q => q.difficultyLevel === difficulty);
+           resolve(filtered.length);
+        } else {
+           resolve(allSubjectQuestions.length);
+        }
+      };
       request.onerror = () => resolve(0);
     });
   }
@@ -300,14 +297,31 @@ class TrainDB {
   async getDatabaseStats(): Promise<DbStats> {
     const db = await this.open();
     
-    const countSubject = (subject: Subject): Promise<number> => {
+    const getStatsForSubject = (subject: Subject): Promise<LevelStats> => {
       return new Promise((resolve) => {
         const transaction = db.transaction([STORE_QUESTIONS], 'readonly');
         const store = transaction.objectStore(STORE_QUESTIONS);
         const index = store.index('subject');
-        const request = index.count(subject);
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => resolve(0);
+        const request = index.getAll(subject);
+        
+        request.onsuccess = () => {
+           const all = request.result as Question[];
+           const stats: LevelStats = {
+             total: all.length,
+             byLevel: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+           };
+           all.forEach(q => {
+              if (stats.byLevel[q.difficultyLevel] !== undefined) {
+                stats.byLevel[q.difficultyLevel]++;
+              } else {
+                // Handle legacy data or odd levels
+                const lvl = Math.min(5, Math.max(1, q.difficultyLevel || 1));
+                stats.byLevel[lvl] = (stats.byLevel[lvl] || 0) + 1;
+              }
+           });
+           resolve(stats);
+        };
+        request.onerror = () => resolve({ total: 0, byLevel: {1:0,2:0,3:0,4:0,5:0} });
       });
     };
 
@@ -322,53 +336,56 @@ class TrainDB {
     };
 
     const [math, lang, logic, phys, imgs] = await Promise.all([
-      countSubject(Subject.MATH),
-      countSubject(Subject.LANGUAGE),
-      countSubject(Subject.LOGIC),
-      countSubject(Subject.PHYSICS),
+      getStatsForSubject(Subject.MATH),
+      getStatsForSubject(Subject.LANGUAGE),
+      getStatsForSubject(Subject.LOGIC),
+      getStatsForSubject(Subject.PHYSICS),
       countImages()
     ]);
 
     return {
-      mathCount: math,
-      languageCount: lang,
-      logicCount: logic,
-      physicsCount: phys,
-      imageCount: imgs
+      math: math,
+      language: lang,
+      logic: logic,
+      physics: phys,
+      imageCount: imgs,
+      totalQuestions: math.total + lang.total + logic.total + phys.total
     };
   }
 
-  async getRandomQuestion(subject: Subject): Promise<Question | null> {
+  async getRandomQuestion(subject: Subject, difficulty?: number): Promise<Question | null> {
     const db = await this.open();
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([STORE_QUESTIONS], 'readonly');
       const store = transaction.objectStore(STORE_QUESTIONS);
       const index = store.index('subject');
       
-      const keyRequest = index.getAllKeys(subject);
+      // If difficulty is provided, we need to filter
+      const request = index.getAll(subject);
 
-      keyRequest.onsuccess = () => {
-        const keys = keyRequest.result;
-        if (keys.length === 0) {
+      request.onsuccess = () => {
+        let candidates = request.result as Question[];
+        
+        if (difficulty) {
+           candidates = candidates.filter(q => q.difficultyLevel === difficulty);
+        }
+
+        if (candidates.length === 0) {
           resolve(null);
           return;
         }
         
-        const randomKey = keys[Math.floor(Math.random() * keys.length)];
-        const objRequest = store.get(randomKey);
-        objRequest.onsuccess = () => resolve(objRequest.result as Question);
-        objRequest.onerror = () => resolve(null);
+        const randomQ = candidates[Math.floor(Math.random() * candidates.length)];
+        resolve(randomQ);
       };
       
-      keyRequest.onerror = () => reject("Failed to get keys");
+      request.onerror = () => reject("Failed to get questions");
     });
   }
 
   async saveImage(prompt: string, base64: string): Promise<void> {
     const db = await this.open();
     
-    // ALWAYS optimize/compress before saving anywhere
-    // This converts PNG to JPEG (quality 0.7) which is much smaller and efficient
     let optimizedBase64 = base64;
     try {
         optimizedBase64 = await compressBase64(base64);
@@ -376,26 +393,19 @@ class TrainDB {
         console.warn("Image optimization failed, falling back to original", e);
     }
 
-    // 1. Prune old images if LOCAL limit reached (keeps browser fast)
     await this.pruneImages(db);
 
-    // 2. Save to Cloud (Archive) - Using the optimized version
     if (this.firestore) {
         const safeId = encodeURIComponent(prompt); 
-        
-        // Safety check for the 1MB limit (should rarely hit with JPEG)
         if (optimizedBase64.length <= 1040000) {
             setDoc(doc(this.firestore, 'images', safeId), {
                 prompt: prompt,
                 base64: optimizedBase64,
                 timestamp: Date.now()
             }, { merge: true }).catch(e => console.warn("Failed to save image to cloud", e));
-        } else {
-            console.warn("Image too big for cloud even after optimization.");
         }
     }
 
-    // 3. Save Locally (Now using the optimized version to save user disk space)
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([STORE_IMAGES], 'readwrite');
       const store = transaction.objectStore(STORE_IMAGES);
@@ -411,27 +421,18 @@ class TrainDB {
     return new Promise((resolve) => {
       const transaction = db.transaction([STORE_IMAGES], 'readwrite');
       const store = transaction.objectStore(STORE_IMAGES);
-      
-      // Check count
       const countReq = store.count();
       
       countReq.onsuccess = () => {
         if (countReq.result >= MAX_STORED_IMAGES) {
-          // Strategy: Get all, sort in JS, delete oldest LOCALLY.
           const allReq = store.getAll();
           allReq.onsuccess = () => {
              const allImgs = allReq.result as ImageRecord[];
              if (allImgs.length >= MAX_STORED_IMAGES) {
-                // Sort by timestamp ascending (oldest first)
                 allImgs.sort((a, b) => a.timestamp - b.timestamp);
-                
-                // Calculate how many to remove
                 const targetDelete = countReq.result - MAX_STORED_IMAGES + 1;
                 const toRemove = allImgs.slice(0, targetDelete);
-                
-                toRemove.forEach(img => {
-                   store.delete(img.prompt);
-                });
+                toRemove.forEach(img => store.delete(img.prompt));
              }
              resolve();
           };
@@ -439,8 +440,7 @@ class TrainDB {
           resolve();
         }
       };
-      
-      countReq.onerror = () => resolve(); // Fail safe
+      countReq.onerror = () => resolve(); 
     });
   }
 
@@ -461,7 +461,6 @@ class TrainDB {
       const transaction = db.transaction([STORE_IMAGES], 'readonly');
       const store = transaction.objectStore(STORE_IMAGES);
       const request = store.get(prompt);
-
       request.onsuccess = () => {
         const result = request.result as ImageRecord;
         resolve(result ? result.base64 : null);
@@ -470,29 +469,19 @@ class TrainDB {
     });
   }
   
-  /**
-   * Finds visualSubjects from questions that do NOT have a corresponding image in the local DB.
-   */
   async getMissingVisualSubjects(): Promise<string[]> {
       const db = await this.open();
       return new Promise((resolve, reject) => {
-         // Get all questions
          const qStore = db.transaction([STORE_QUESTIONS], 'readonly').objectStore(STORE_QUESTIONS);
          const qReq = qStore.getAll();
-         
          qReq.onsuccess = () => {
              const questions = qReq.result as Question[];
-             // Filter those that actually need an image
              const candidates = questions
                 .filter(q => q.visualSubject && q.visualSubject.length > 0)
                 .map(q => q.visualSubject!);
-             
              const uniqueCandidates = [...new Set(candidates)];
-
-             // Get all existing image prompts (keys)
              const iStore = db.transaction([STORE_IMAGES], 'readonly').objectStore(STORE_IMAGES);
              const iReq = iStore.getAllKeys();
-             
              iReq.onsuccess = () => {
                  const existingPrompts = new Set(iReq.result as string[]);
                  const missing = uniqueCandidates.filter(s => !existingPrompts.has(s));
@@ -509,7 +498,7 @@ class TrainDB {
       try {
         const estimate = await navigator.storage.estimate();
         const usage = estimate.usage || 0;
-        const quota = estimate.quota || 1024 * 1024 * 1024; // Default 1GB if unknown
+        const quota = estimate.quota || 1024 * 1024 * 1024; 
         return {
           usage,
           quota,
@@ -524,19 +513,13 @@ class TrainDB {
 
   // --- CLOUD SYNC (FIREBASE) ---
 
-  /**
-   * Checks how many questions AND images are currently stored in the cloud.
-   */
   async getCloudStats(): Promise<CloudStats> {
     if (!this.firestore) return { questions: -1, images: -1 };
     try {
-      // Efficient server-side counting
       const qColl = collection(this.firestore, 'questions');
       const qSnapshot = await getCountFromServer(qColl);
-      
       const iColl = collection(this.firestore, 'images');
       const iSnapshot = await getCountFromServer(iColl);
-
       return { 
           questions: qSnapshot.data().count,
           images: iSnapshot.data().count
@@ -547,20 +530,8 @@ class TrainDB {
     }
   }
 
-  /**
-   * Deprecated: Use getCloudStats instead for full picture
-   */
-  async getCloudQuestionCount(): Promise<number> {
-     const stats = await this.getCloudStats();
-     return stats.questions;
-  }
-
-  /**
-   * Sends a dummy document to Firestore to verify connection and permissions.
-   */
   async sendTestData(): Promise<void> {
     if (!this.firestore) throw new Error("Molnet ej konfigurerat");
-    
     const testDocRef = doc(this.firestore, '_connection_test', 'ping');
     await setDoc(testDocRef, {
       message: "Connection Successful",
@@ -571,151 +542,102 @@ class TrainDB {
   
   async syncLocalToCloud(): Promise<number> {
     if (!this.firestore) throw new Error("Molnet ej konfigurerat (Firebase)");
-
-    // 1. Get all local questions AND images
     const db = await this.open();
-    
     const questions: any[] = await new Promise((resolve) => {
       const transaction = db.transaction([STORE_QUESTIONS], 'readonly');
       const store = transaction.objectStore(STORE_QUESTIONS);
       const req = store.getAll();
       req.onsuccess = () => resolve(req.result);
     });
-
     const images: ImageRecord[] = await new Promise((resolve) => {
         const transaction = db.transaction([STORE_IMAGES], 'readonly');
         const store = transaction.objectStore(STORE_IMAGES);
         const req = store.getAll();
         req.onsuccess = () => resolve(req.result);
     });
-
     if (questions.length === 0 && images.length === 0) return 0;
-
     const BATCH_SIZE = 400; 
     let syncedCount = 0;
-    
-    // --- SYNC QUESTIONS ---
     if (questions.length > 0) {
         for (let i = 0; i < questions.length; i += BATCH_SIZE) {
             const batch = writeBatch(this.firestore);
             const chunk = questions.slice(i, i + BATCH_SIZE);
-            
             chunk.forEach(q => {
                 const docRef = doc(this.firestore!, 'questions', q.id);
                 const safeData = JSON.parse(JSON.stringify(q));
                 batch.set(docRef, safeData, { merge: true });
             });
-
             await batch.commit();
             syncedCount += chunk.length;
         }
     }
-
-    // --- SYNC IMAGES ---
     if (images.length > 0) {
         for (let i = 0; i < images.length; i += BATCH_SIZE) {
             const batch = writeBatch(this.firestore);
             const chunk = images.slice(i, i + BATCH_SIZE);
-            
-            // Use for...of loop to allow await for compression
             for (const img of chunk) {
                 if (img.base64 === 'BLOCKED') continue; 
-                
                 let finalBase64 = img.base64;
-                
-                // Always try to optimize/compress to save bandwidth and storage.
-                // This is especially important for syncing old images that might be raw PNGs.
                 try {
                     finalBase64 = await compressBase64(finalBase64);
                 } catch (err) {
                     console.warn("Compression failed during sync, trying original", err);
                 }
-                
-                // Double check size after potential compression
-                if (finalBase64.length > 1040000) {
-                    console.error(`Image too big to sync (${finalBase64.length} bytes): ${img.prompt}`);
-                    continue; 
-                }
-
+                if (finalBase64.length > 1040000) continue; 
                 const safeId = encodeURIComponent(img.prompt);
                 const docRef = doc(this.firestore!, 'images', safeId);
-                
                 batch.set(docRef, {
                     prompt: img.prompt,
                     base64: finalBase64,
                     timestamp: img.timestamp
                 }, { merge: true });
             }
-
             await batch.commit();
         }
     }
-
     return syncedCount;
   }
 
   async syncCloudToLocal(): Promise<number> {
     if (!this.firestore) throw new Error("Molnet ej konfigurerat (Firebase)");
-
-    // NOTE: We only sync QUESTIONS downwards. 
-    // Syncing 3000 images downwards would crash the browser storage/memory.
-    // Images are treated as "Cloud Archive".
-
     const querySnapshot = await getDocs(collection(this.firestore, 'questions'));
-    
     if (querySnapshot.empty) return 0;
-
     const db = await this.open();
     const transaction = db.transaction([STORE_QUESTIONS], 'readwrite');
     const store = transaction.objectStore(STORE_QUESTIONS);
-
     let count = 0;
     querySnapshot.forEach((doc) => {
       const data = doc.data();
       store.put(data);
       count++;
     });
-    
     return count;
   }
 
   // --- CLEANUP DUPLICATES ---
 
   // Helper to perform deduplication logic on a list of questions
-  // Returns IDs to delete
   private identifyDuplicates(questions: any[]): string[] {
      const uniqueQuestions: any[] = [];
      const duplicateIds: string[] = [];
      
-     // Sort so we keep oldest or newest? Let's keep newest (usually better formatted)
-     // Actually, standard is usually keep oldest to preserve IDs, but here ID doesn't matter much.
-     // Let's iterate.
-     
      for (const q of questions) {
          const text = (q.text || "").trim().toUpperCase();
-         if (text.length < 5) continue; // Skip broken/empty
+         if (text.length < 5) continue; 
 
          const qNums = extractNumbersFingerprint(text);
-         
          let isDuplicate = false;
          
-         // Check against accepted unique questions
          for (const unique of uniqueQuestions) {
-             // 1. Subject Mismatch -> Not duplicate
              if (unique.subject && q.subject && unique.subject !== q.subject) continue;
              
-             // 2. NUMBER GUARD: If numbers exist and are different -> Not duplicate
-             // Example: "1+1" vs "2+2". Both have high similarity in text "VAD BLIR X PLUS Y", but numbers differ.
+             // STRICT LEVEL CHECK: Question from Level 1 cannot duplicate Level 5
+             if (unique.difficultyLevel !== q.difficultyLevel) continue;
+
              const uNums = extractNumbersFingerprint((unique.text || ""));
-             if (qNums !== uNums) {
-                 continue; // Different numbers = Different question. Safe to keep.
-             }
+             if (qNums !== uNums) continue; 
              
-             // 3. Fuzzy Text Match
-             // If numbers are same (or empty), check text similarity.
              const similarity = getSimilarity(text, (unique.text || "").toUpperCase());
-             
-             // Threshold: 85% similar triggers deletion of the new one
              if (similarity > 0.85) {
                  isDuplicate = true;
                  break;
@@ -728,16 +650,16 @@ class TrainDB {
              uniqueQuestions.push(q);
          }
      }
-     
      return duplicateIds;
   }
 
   /**
-   * Scans Firebase Cloud DB for smart duplicates (Fuzzy match + Number guard)
+   * Scans Firebase Cloud DB for smart duplicates (Strict on Subject & Difficulty)
    */
   async cleanupDuplicatesCloud(): Promise<number> {
     if (!this.firestore) throw new Error("Molnet ej konfigurerat (Firebase)");
 
+    // We fetch ALL to do the logic client side to ensure Levenshtein works
     const querySnapshot = await getDocs(collection(this.firestore, 'questions'));
     if (querySnapshot.empty) return 0;
     
@@ -748,32 +670,28 @@ class TrainDB {
 
     if (duplicateIds.length === 0) return 0;
 
-    // Delete Duplicates in Batches
     const BATCH_SIZE = 400;
     let deletedCount = 0;
 
     for (let i = 0; i < duplicateIds.length; i += BATCH_SIZE) {
         const batch = writeBatch(this.firestore);
         const chunk = duplicateIds.slice(i, i + BATCH_SIZE);
-        
         chunk.forEach(id => {
             batch.delete(doc(this.firestore!, 'questions', id));
         });
-
         await batch.commit();
         deletedCount += chunk.length;
     }
-
     return deletedCount;
   }
   
   /**
    * ADVANCED CLEANUP: Uses Gemini to find duplicates semantically.
+   * Groups by Subject AND Difficulty to be precise.
    */
   async cleanupDuplicatesCloudAI(onProgress?: (msg: string) => void): Promise<number> {
     if (!this.firestore) throw new Error("Molnet ej konfigurerat (Firebase)");
 
-    // 1. Fetch all questions
     if (onProgress) onProgress("Hämtar alla frågor från molnet...");
     const querySnapshot = await getDocs(collection(this.firestore, 'questions'));
     if (querySnapshot.empty) return 0;
@@ -781,41 +699,38 @@ class TrainDB {
     const allQuestions: (Question & {subject: string})[] = [];
     querySnapshot.forEach(doc => allQuestions.push({ ...doc.data(), id: doc.id } as any));
 
-    const subjectGroups: Record<string, typeof allQuestions> = {};
+    // Group by "Subject_Level" to avoid cross-contamination
+    const buckets: Record<string, typeof allQuestions> = {};
     
-    // 2. Group by Subject
     for (const q of allQuestions) {
-      const s = q.subject || 'UNKNOWN';
-      if (!subjectGroups[s]) subjectGroups[s] = [];
-      subjectGroups[s].push(q);
+      const key = `${q.subject || 'UNKNOWN'}_${q.difficultyLevel || 1}`;
+      if (!buckets[key]) buckets[key] = [];
+      buckets[key].push(q);
     }
 
     const allIdsToDelete: string[] = [];
+    const keys = Object.keys(buckets);
 
-    // 3. Iterate subjects
-    // Note: We only use AI for Logic, Language, Physics. Math is safer with the algorithmic check.
-    const subjectsToScan = [Subject.LANGUAGE, Subject.LOGIC, Subject.PHYSICS, Subject.MATH];
-
-    for (const subject of subjectsToScan) {
-       const group = subjectGroups[subject] || [];
+    for (let k = 0; k < keys.length; k++) {
+       const key = keys[k];
+       const group = buckets[key];
+       const [sub, lvl] = key.split('_');
+       
        if (group.length < 2) continue;
 
-       // 4. Batch logic for AI context window
-       // Sending ~80 questions at a time is safe for Flash context
-       const BATCH_SIZE = 80;
+       const BATCH_SIZE = 60; // Smaller batch for AI to handle precision
        
        for (let i = 0; i < group.length; i += BATCH_SIZE) {
-          if (onProgress) onProgress(`Analyserar ${subject} (${i}-${Math.min(i+BATCH_SIZE, group.length)})...`);
+          if (onProgress) onProgress(`Analyserar ${sub} Nivå ${lvl} (Del ${Math.floor(i/BATCH_SIZE)+1})...`);
           
           const batch = group.slice(i, i + BATCH_SIZE);
-          
-          // Simplify data sent to AI to save tokens
           const simplifiedBatch = batch.map(q => ({
              id: q.id,
              text: q.text
           }));
 
-          const duplicates = await checkDuplicatesWithAI(simplifiedBatch, subject);
+          // We use the generic "checkDuplicatesWithAI" but now the context is constrained to this specific bucket
+          const duplicates = await checkDuplicatesWithAI(simplifiedBatch, `${sub} (NIVÅ ${lvl})`);
           if (duplicates && duplicates.length > 0) {
               allIdsToDelete.push(...duplicates);
           }
@@ -824,7 +739,6 @@ class TrainDB {
 
     if (allIdsToDelete.length === 0) return 0;
 
-    // 5. Delete
     if (onProgress) onProgress(`Raderar ${allIdsToDelete.length} dubbletter...`);
     const DELETE_BATCH_SIZE = 400;
     for (let i = 0; i < allIdsToDelete.length; i += DELETE_BATCH_SIZE) {
@@ -864,7 +778,6 @@ class TrainDB {
                resolve(0);
            }
        };
-       
        req.onerror = () => reject("Failed to scan local DB");
     });
   }
@@ -875,17 +788,13 @@ class TrainDB {
     const db = await this.open();
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([STORE_QUESTIONS, STORE_IMAGES], 'readonly');
-      
       const qStore = transaction.objectStore(STORE_QUESTIONS);
       const iStore = transaction.objectStore(STORE_IMAGES);
-
       const questionsRequest = qStore.getAll();
       const imagesRequest = iStore.getAll();
-
       let questions: any[] = [];
       let images: any[] = [];
       let completed = 0;
-
       const checkDone = () => {
         completed++;
         if (completed === 2) {
@@ -898,17 +807,14 @@ class TrainDB {
           resolve(JSON.stringify(backup));
         }
       };
-
       questionsRequest.onsuccess = () => {
         questions = questionsRequest.result;
         checkDone();
       };
-
       imagesRequest.onsuccess = () => {
         images = imagesRequest.result;
         checkDone();
       };
-
       transaction.onerror = () => reject("Export failed");
     });
   }
@@ -916,19 +822,15 @@ class TrainDB {
   async importDatabase(jsonString: string): Promise<number> {
     const db = await this.open();
     let data: BackupData;
-    
     try {
       data = JSON.parse(jsonString);
     } catch (e) {
       throw new Error("Invalid JSON file");
     }
-
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([STORE_QUESTIONS, STORE_IMAGES], 'readwrite');
-      
       const qStore = transaction.objectStore(STORE_QUESTIONS);
       const iStore = transaction.objectStore(STORE_IMAGES);
-
       let count = 0;
       if (data.questions) {
         data.questions.forEach(q => {
