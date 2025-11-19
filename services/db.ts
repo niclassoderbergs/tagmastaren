@@ -1,7 +1,7 @@
 
 import { Question, Subject, FirebaseConfig } from '../types';
 import { initializeApp, FirebaseApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, Firestore, doc, setDoc, getDocs, collection, writeBatch, getCountFromServer } from 'firebase/firestore';
+import { getFirestore, Firestore, doc, setDoc, getDocs, collection, writeBatch, getCountFromServer, deleteDoc } from 'firebase/firestore';
 
 const DB_NAME = 'TrainMasterDB';
 const DB_VERSION = 1;
@@ -51,6 +51,56 @@ export interface StorageEstimate {
   quota: number; // bytes
   percent: number;
 }
+
+// --- HELPER FUNCTIONS FOR SMART DEDUPLICATION ---
+
+// Levenshtein distance to calculate text similarity (0 to 100%)
+const getSimilarity = (s1: string, s2: string): number => {
+  let longer = s1;
+  let shorter = s2;
+  if (s1.length < s2.length) {
+    longer = s2;
+    shorter = s1;
+  }
+  const longerLength = longer.length;
+  if (longerLength === 0) {
+    return 1.0;
+  }
+  return (longerLength - editDistance(longer, shorter)) / parseFloat(longerLength.toString());
+};
+
+const editDistance = (s1: string, s2: string): number => {
+  s1 = s1.toLowerCase();
+  s2 = s2.toLowerCase();
+  const costs = new Array();
+  for (let i = 0; i <= s1.length; i++) {
+    let lastValue = i;
+    for (let j = 0; j <= s2.length; j++) {
+      if (i == 0)
+        costs[j] = j;
+      else {
+        if (j > 0) {
+          let newValue = costs[j - 1];
+          if (s1.charAt(i - 1) != s2.charAt(j - 1))
+            newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
+          costs[j - 1] = lastValue;
+          lastValue = newValue;
+        }
+      }
+    }
+    if (i > 0)
+      costs[s2.length] = lastValue;
+  }
+  return costs[s2.length];
+};
+
+// Extract numbers from string to protect Math questions
+// Returns string like "1,5" for "What is 1 + 5?"
+const extractNumbersFingerprint = (text: string): string => {
+  const nums = text.match(/\d+/g);
+  if (!nums) return "";
+  return nums.sort().join(',');
+};
 
 // Helper to compress large images before cloud upload (Firestore 1MB limit)
 const compressBase64 = (base64: string): Promise<string> => {
@@ -626,6 +676,124 @@ class TrainDB {
     });
     
     return count;
+  }
+
+  // --- CLEANUP DUPLICATES ---
+
+  // Helper to perform deduplication logic on a list of questions
+  // Returns IDs to delete
+  private identifyDuplicates(questions: any[]): string[] {
+     const uniqueQuestions: any[] = [];
+     const duplicateIds: string[] = [];
+     
+     // Sort so we keep oldest or newest? Let's keep newest (usually better formatted)
+     // Actually, standard is usually keep oldest to preserve IDs, but here ID doesn't matter much.
+     // Let's iterate.
+     
+     for (const q of questions) {
+         const text = (q.text || "").trim().toUpperCase();
+         if (text.length < 5) continue; // Skip broken/empty
+
+         const qNums = extractNumbersFingerprint(text);
+         
+         let isDuplicate = false;
+         
+         // Check against accepted unique questions
+         for (const unique of uniqueQuestions) {
+             // 1. Subject Mismatch -> Not duplicate
+             if (unique.subject && q.subject && unique.subject !== q.subject) continue;
+             
+             // 2. NUMBER GUARD: If numbers exist and are different -> Not duplicate
+             // Example: "1+1" vs "2+2". Both have high similarity in text "VAD BLIR X PLUS Y", but numbers differ.
+             const uNums = extractNumbersFingerprint((unique.text || ""));
+             if (qNums !== uNums) {
+                 continue; // Different numbers = Different question. Safe to keep.
+             }
+             
+             // 3. Fuzzy Text Match
+             // If numbers are same (or empty), check text similarity.
+             const similarity = getSimilarity(text, (unique.text || "").toUpperCase());
+             
+             // Threshold: 85% similar triggers deletion of the new one
+             if (similarity > 0.85) {
+                 isDuplicate = true;
+                 break;
+             }
+         }
+
+         if (isDuplicate) {
+             duplicateIds.push(q.id);
+         } else {
+             uniqueQuestions.push(q);
+         }
+     }
+     
+     return duplicateIds;
+  }
+
+  /**
+   * Scans Firebase Cloud DB for smart duplicates (Fuzzy match + Number guard)
+   */
+  async cleanupDuplicatesCloud(): Promise<number> {
+    if (!this.firestore) throw new Error("Molnet ej konfigurerat (Firebase)");
+
+    const querySnapshot = await getDocs(collection(this.firestore, 'questions'));
+    if (querySnapshot.empty) return 0;
+    
+    const questions: any[] = [];
+    querySnapshot.forEach(doc => questions.push({ ...doc.data(), id: doc.id }));
+
+    const duplicateIds = this.identifyDuplicates(questions);
+
+    if (duplicateIds.length === 0) return 0;
+
+    // Delete Duplicates in Batches
+    const BATCH_SIZE = 400;
+    let deletedCount = 0;
+
+    for (let i = 0; i < duplicateIds.length; i += BATCH_SIZE) {
+        const batch = writeBatch(this.firestore);
+        const chunk = duplicateIds.slice(i, i + BATCH_SIZE);
+        
+        chunk.forEach(id => {
+            batch.delete(doc(this.firestore!, 'questions', id));
+        });
+
+        await batch.commit();
+        deletedCount += chunk.length;
+    }
+
+    return deletedCount;
+  }
+
+  /**
+   * Scans Local IndexedDB for smart duplicates
+   */
+  async cleanupDuplicatesLocal(): Promise<number> {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+       const transaction = db.transaction([STORE_QUESTIONS], 'readwrite');
+       const store = transaction.objectStore(STORE_QUESTIONS);
+       const req = store.getAll();
+
+       req.onsuccess = () => {
+           const questions = req.result as Question[];
+           const duplicateIds = this.identifyDuplicates(questions);
+
+           if (duplicateIds.length > 0) {
+               let processed = 0;
+               duplicateIds.forEach(id => {
+                   store.delete(id);
+                   processed++;
+               });
+               resolve(processed);
+           } else {
+               resolve(0);
+           }
+       };
+       
+       req.onerror = () => reject("Failed to scan local DB");
+    });
   }
 
   // --- EXPORT/IMPORT ---

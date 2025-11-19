@@ -37,6 +37,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
   const [cloudStatus, setCloudStatus] = useState<string>("");
   const [tempFirebaseConfig, setTempFirebaseConfig] = useState<string>("");
   
+  // Cleanup State
+  const [cleanupStatus, setCleanupStatus] = useState<string>("");
+  const [isCleaning, setIsCleaning] = useState(false);
+
   // Banned Topics State for editing
   const [bannedTopicsInput, setBannedTopicsInput] = useState<string>("");
   
@@ -297,6 +301,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
     } catch (e: any) {
       console.error(e);
       setCloudStatus("Fel: " + e.message);
+    }
+  };
+
+  const handleCleanupCloud = async () => {
+    if (!confirm("Är du säker? Detta raderar dubbletter från moln-databasen permanent.")) return;
+    
+    setCloudStatus("Letar dubbletter i molnet...");
+    setIsCleaning(true);
+    try {
+      const deleted = await trainDb.cleanupDuplicatesCloud();
+      setCloudStatus(`Städning klar! Raderade ${deleted} dubbletter.`);
+      refreshCloudStats();
+    } catch (e: any) {
+      setCloudStatus("Fel vid städning: " + e.message);
+    }
+    setIsCleaning(false);
+  };
+
+  const handleCleanupLocal = async () => {
+    if (!confirm("Är du säker? Detta rensar dubbletter från webbläsarens minne.")) return;
+    
+    setBackupStatus("Städar lokalt...");
+    try {
+      const deleted = await trainDb.cleanupDuplicatesLocal();
+      setBackupStatus(`Klart! Tog bort ${deleted} dubbletter.`);
+      refreshLocalStats();
+    } catch (e: any) {
+      setBackupStatus("Fel: " + e.message);
     }
   };
 
@@ -682,13 +714,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                       </button>
                    </div>
 
-                   <div className="flex gap-2">
+                   <div className="flex gap-2 mb-2">
                      <button
                         onClick={handleSendTestData}
                         className="flex-1 bg-white hover:bg-red-50 text-red-800 font-bold py-2 rounded-lg text-xs border border-red-200 active:scale-95 flex items-center justify-center gap-2"
                         title="Skapa en test-post i databasen för att se att allt fungerar"
                      >
                        <span>🧪</span> SKICKA TESTDATA (PING)
+                     </button>
+                     
+                     <button
+                        onClick={handleCleanupCloud}
+                        disabled={isCleaning}
+                        className="flex-1 bg-white hover:bg-red-50 text-red-800 font-bold py-2 rounded-lg text-xs border border-red-200 active:scale-95 flex items-center justify-center gap-2"
+                        title="Rensa bort identiska frågor i molnet för att spara plats"
+                     >
+                       <span>🧹</span> {isCleaning ? "STÄDAR..." : "STÄDA DUBBLETTER (MOLN)"}
                      </button>
                    </div>
 
@@ -880,19 +921,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                     <div className="text-center text-sm text-slate-400 mb-4">Läser in statistik...</div>
                   )}
                   
-                  <div className="flex gap-4 flex-col sm:flex-row">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <button 
                       onClick={handleExport}
-                      className="flex-1 bg-white hover:bg-indigo-50 text-indigo-700 font-bold py-2 px-4 rounded-lg border-2 border-indigo-200 shadow-sm active:scale-95 transition-all flex justify-center items-center gap-2"
+                      className="bg-white hover:bg-indigo-50 text-indigo-700 font-bold py-2 px-4 rounded-lg border-2 border-indigo-200 shadow-sm active:scale-95 transition-all flex justify-center items-center gap-2"
                     >
                       <span>💾</span> FIL-BACKUP
                     </button>
                     
-                    <label className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm active:scale-95 transition-all cursor-pointer flex justify-center items-center gap-2">
+                    <label className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm active:scale-95 transition-all cursor-pointer flex justify-center items-center gap-2">
                       <span>📂</span> LÄS IN FIL
                       <input type="file" accept=".json" onChange={handleImport} className="hidden" />
                     </label>
+
+                    <button 
+                      onClick={handleCleanupLocal}
+                      className="col-span-1 sm:col-span-2 bg-white hover:bg-red-50 text-red-700 font-bold py-2 px-4 rounded-lg border-2 border-red-200 shadow-sm active:scale-95 transition-all flex justify-center items-center gap-2"
+                      title="Rensa bort dubbletter i den lokala databasen"
+                    >
+                      <span>🧹</span> STÄDA DUBBLETTER (LOKALT)
+                    </button>
                   </div>
+
                   {backupStatus && (
                     <div className="mt-2 text-center text-sm font-bold text-indigo-800 animate-pulse">
                       {backupStatus}
