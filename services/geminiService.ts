@@ -557,10 +557,13 @@ export const generateQuestion = async (
   useDigits: boolean, 
   currentCarCount: number, 
   previousType?: QuestionType,
-  bannedTopics: string[] = []
+  bannedTopics: string[] = [],
+  allowDragDrop: boolean = true // New parameter to throttle drag/drop frequency
 ): Promise<Question> => {
   
-  const canTriggerDragDrop = subject === Subject.MATH && difficulty <= 2 && previousType !== 'DRAG_AND_DROP';
+  // Only generate drag/drop if allowed by the session manager
+  const canTriggerDragDrop = subject === Subject.MATH && difficulty <= 2 && previousType !== 'DRAG_AND_DROP' && allowDragDrop;
+  
   if (canTriggerDragDrop && Math.random() < 0.3) {
     return generateDragDropQuestion(difficulty);
   }

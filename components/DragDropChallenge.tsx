@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { DragDropConfig } from '../types';
 
 interface DragDropChallengeProps {
@@ -12,6 +12,8 @@ export const DragDropChallenge: React.FC<DragDropChallengeProps> = ({ config, on
   const [loadedCount, setLoadedCount] = useState(0);
   // We visualize items as objects with an ID and a state (loaded or on_platform)
   const [items, setItems] = useState<{ id: number, isLoaded: boolean }[]>([]);
+  
+  const missionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Initialize items
@@ -21,6 +23,13 @@ export const DragDropChallenge: React.FC<DragDropChallengeProps> = ({ config, on
     }));
     setItems(newItems);
     setLoadedCount(0);
+    
+    // Scroll to mission instruction
+    setTimeout(() => {
+      if (missionRef.current) {
+         missionRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 300);
   }, [config]);
 
   const toggleItem = (id: number) => {
@@ -60,7 +69,7 @@ export const DragDropChallenge: React.FC<DragDropChallengeProps> = ({ config, on
   return (
     <div className="w-full flex flex-col gap-6 select-none uppercase">
       {/* Instructional Status */}
-      <div className="bg-blue-50 p-4 rounded-2xl border-2 border-blue-200 text-center flex flex-col items-center justify-center">
+      <div ref={missionRef} className="bg-blue-50 p-4 rounded-2xl border-2 border-blue-200 text-center flex flex-col items-center justify-center scroll-mt-24">
         <p className="text-sm font-bold text-blue-800 mb-1 tracking-wider">DITT UPPDRAG</p>
         <div className="flex items-center gap-3 bg-white px-6 py-2 rounded-full shadow-sm border border-blue-100">
           <span className="text-xl font-bold text-slate-600">{displayVerb}:</span>

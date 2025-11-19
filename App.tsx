@@ -122,6 +122,9 @@ export default function App() {
   const [questionBuffer, setQuestionBuffer] = useState<Question[]>([]);
   const fetchingCountRef = useRef(0); // Tracks active API calls to prevent over-fetching
   
+  // DRAG DROP FREQUENCY CONTROL
+  const [hasDragDropOccurred, setHasDragDropOccurred] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | null, msg: string }>({ type: null, msg: "" });
@@ -170,10 +173,23 @@ export default function App() {
 
   // 2. Scroll to Reward Image when it appears
   useEffect(() => {
-    if (feedback.type === 'success' && (isGeneratingImage || preloadedRewardImage)) {
+    if (feedback.type === 'success' && (isGeneratingImage || preloadedRewardImage) && rewardSectionRef.current) {
       setTimeout(() => {
-        rewardSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 150); // Slightly longer delay to allow image container to expand
+         const element = rewardSectionRef.current;
+         if (element) {
+             // Use window.scrollTo with an offset to ensure the image is fully visible below the header
+             const offset = 110; 
+             const bodyRect = document.body.getBoundingClientRect().top;
+             const elementRect = element.getBoundingClientRect().top;
+             const elementPosition = elementRect - bodyRect;
+             const offsetPosition = elementPosition - offset;
+             
+             window.scrollTo({
+                 top: offsetPosition,
+                 behavior: "smooth"
+             });
+         }
+      }, 150); 
     }
   }, [feedback.type, isGeneratingImage, preloadedRewardImage]);
 
@@ -211,8 +227,14 @@ export default function App() {
       
       // Pass settings.bannedTopics if enabled
       const banList = settings.enableBannedTopics ? settings.bannedTopics : [];
+      
+      // Logic for throttle Drag Drop: 
+      // 1. Has it occurred in this mission?
+      // 2. Is there already one in the buffer waiting?
+      const bufferHasDragDrop = questionBuffer.some(q => q.type === 'DRAG_AND_DROP');
+      const allowDragDrop = !hasDragDropOccurred && !bufferHasDragDrop;
 
-      const question = await generateQuestion(subject, difficulty, settings.useDigits, carCount, previousType, banList);
+      const question = await generateQuestion(subject, difficulty, settings.useDigits, carCount, previousType, banList, allowDragDrop);
       
       // Add to buffer immediately (without image)
       setQuestionBuffer(prev => [...prev, question]);
@@ -305,7 +327,7 @@ export default function App() {
       const carCount = gameState.cars.length;
       const banList = settings.enableBannedTopics ? settings.bannedTopics : [];
       
-      generateQuestion(subject, difficulty, settings.useDigits, carCount, currentQuestion?.type, banList).then(q => {
+      generateQuestion(subject, difficulty, settings.useDigits, carCount, currentQuestion?.type, banList, !hasDragDropOccurred).then(q => {
         setCurrentQuestion(q);
         setLoading(false);
         ensureBufferFilled(subject);
@@ -318,6 +340,7 @@ export default function App() {
     playSound('click');
     setSelectedSubject(subject);
     setMissionProgress(0);
+    setHasDragDropOccurred(false); // Reset throttle for new mission
     setQuestionBuffer([]); // Clear old buffer
     setPreloadedRewardImage(null);
     
@@ -328,7 +351,7 @@ export default function App() {
     const carCount = gameState.cars.length;
     const banList = settings.enableBannedTopics ? settings.bannedTopics : [];
     
-    const firstQuestion = await generateQuestion(subject, difficulty, settings.useDigits, carCount, undefined, banList);
+    const firstQuestion = await generateQuestion(subject, difficulty, settings.useDigits, carCount, undefined, banList, true);
     
     // USER REQUEST: Never show image for the first question to speed up start.
     // We strip the visualSubject from the first question so the app doesn't try to load it.
@@ -370,6 +393,11 @@ export default function App() {
         score: prev.score + 10, 
         currentStreak: prev.currentStreak + 1
       }));
+      
+      // Track if we used a drag/drop this mission
+      if (currentQuestion?.type === 'DRAG_AND_DROP') {
+          setHasDragDropOccurred(true);
+      }
       
       // Reward Image Display Logic
       if (currentQuestion?.visualSubject) {
