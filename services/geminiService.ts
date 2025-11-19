@@ -570,14 +570,13 @@ export const generateQuestion = async (
     const dbCount = await trainDb.getQuestionCount(subject, difficulty);
     
     let aiProbability = 0;
-    if (dbCount < 50) {
-      aiProbability = 1.0; // Always gen new if low on this level
-    } else if (dbCount < 100) {
-      aiProbability = 0.2; // 20% chance of new
+    // More aggressive AI generation to reach target of 200 questions PER LEVEL
+    if (dbCount < 100) {
+      aiProbability = 1.0; // Always gen new until 100 items
     } else if (dbCount < 200) {
-      aiProbability = 0.1; // 10% chance of new
+      aiProbability = 0.4; // 40% chance of new until 200 items
     } else {
-      aiProbability = 0.05; // 5% chance of new
+      aiProbability = 0.05; // Maintenance mode (5% chance of new)
     }
 
     const rollDice = Math.random(); 

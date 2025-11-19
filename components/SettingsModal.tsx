@@ -288,7 +288,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
 
   const handleCleanupCloud = async (useAi: boolean = false) => {
     if (!confirm(useAi 
-       ? "Detta använder AI för att läsa igenom alla frågor och ta bort dubbletter. Det tar en stund. Är du säker?" 
+       ? "Detta använder AI för att läsa igenom alla frågor och ta bort dubbletter i molnet. Det tar en stund. Är du säker?" 
        : "Är du säker? Detta raderar exakta text-dubbletter från moln-databasen.")) return;
     
     setCloudStatus(useAi ? "Startar AI-analys..." : "Letar dubbletter i molnet...");
@@ -317,16 +317,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
       refreshLocalStats();
     } catch (e: any) {
       setBackupStatus("Fel: " + e.message);
-    }
-  };
-
-  const handleSendTestData = async () => {
-    setCloudStatus("Skickar testdata...");
-    try {
-      await trainDb.sendTestData();
-      setCloudStatus("✅ Testdata skickat!");
-    } catch (e: any) {
-      setCloudStatus("❌ Fel: " + e.message);
     }
   };
 
@@ -576,17 +566,58 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                 <div className="bg-orange-50 p-4 rounded-xl border-2 border-orange-100">
                    <h3 className="font-bold text-orange-900 text-lg mb-2 border-b border-orange-200 pb-2">MOLNET (FIREBASE)</h3>
                    
-                   <div className="space-y-2 mb-4">
+                   {/* Connection Status / Config */}
+                   <div className="mb-4 text-xs">
+                      <div className="flex justify-between mb-2 font-bold text-orange-800">
+                         <span>STATUS: {trainDb.isCloudConnected() ? "ANSLUTEN ✅" : "EJ ANSLUTEN ❌"}</span>
+                         {cloudStats && <span>{cloudStats.questions} Frågor | {cloudStats.images} Bilder</span>}
+                      </div>
+                      
+                      {!trainDb.isCloudConnected() && (
+                          <div className="mb-2">
+                              <textarea 
+                                  value={tempFirebaseConfig}
+                                  onChange={(e) => setTempFirebaseConfig(e.target.value)}
+                                  placeholder="{ apiKey: '...', ... }"
+                                  className="w-full p-2 rounded border border-orange-200 font-mono text-[10px] h-20"
+                              />
+                              <button onClick={handleSaveFirebaseConfig} className="bg-orange-600 text-white px-3 py-1 rounded font-bold mt-1 w-full">SPARA KONFIGURATION</button>
+                          </div>
+                      )}
+                   </div>
+
+                   {/* Sync Actions */}
+                   <div className="grid grid-cols-2 gap-2 mb-4">
+                        <button 
+                          onClick={() => handleCloudSync('up')}
+                          className="bg-orange-200 hover:bg-orange-300 text-orange-900 font-bold py-2 rounded border border-orange-300 text-xs flex flex-col items-center"
+                        >
+                           <span>⬆ SKICKA TILL MOLNET</span>
+                           <span className="text-[9px] opacity-70 font-normal">(Spara din data säkert)</span>
+                        </button>
+                        <button 
+                          onClick={() => handleCloudSync('down')}
+                          className="bg-orange-200 hover:bg-orange-300 text-orange-900 font-bold py-2 rounded border border-orange-300 text-xs flex flex-col items-center"
+                        >
+                           <span>⬇ HÄMTA FRÅN MOLNET</span>
+                           <span className="text-[9px] opacity-70 font-normal">(Få nya frågor)</span>
+                        </button>
+                   </div>
+
+                   <div className="space-y-2 mb-4 border-t border-orange-200 pt-2">
                         <button
                             onClick={() => handleCleanupCloud(true)}
                             disabled={isCleaning}
-                            className="w-full bg-purple-100 hover:bg-purple-200 text-purple-900 font-bold py-2 rounded-lg text-xs border border-purple-300"
+                            className="w-full bg-purple-100 hover:bg-purple-200 text-purple-900 font-bold py-2 rounded-lg text-xs border border-purple-300 shadow-sm"
                         >
-                        <span>🧠</span> {isCleaning ? "ANALYZERAR..." : "AI-STÄDNING (NIVÅ-SMART)"}
+                        <span>🧠</span> {isCleaning ? "ANALYZERAR..." : "AI-STÄDNING AV MOLNET (SMART)"}
                         </button>
+                        <p className="text-[9px] text-center text-orange-800 opacity-70">
+                           Tar bort dubbletter men behåller variationer och olika nivåer.
+                        </p>
                    </div>
                    
-                   {cloudStatus && <div className="mt-2 text-center text-xs font-bold text-orange-800 bg-white/50 p-1 rounded">{cloudStatus}</div>}
+                   {cloudStatus && <div className="mt-2 text-center text-xs font-bold text-orange-800 bg-white/50 p-2 rounded border border-orange-200">{cloudStatus}</div>}
                 </div>
 
               </div>
