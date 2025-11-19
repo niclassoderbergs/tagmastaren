@@ -418,6 +418,40 @@ class TrainDB {
       request.onerror = () => resolve(null);
     });
   }
+  
+  /**
+   * Finds visualSubjects from questions that do NOT have a corresponding image in the local DB.
+   */
+  async getMissingVisualSubjects(): Promise<string[]> {
+      const db = await this.open();
+      return new Promise((resolve, reject) => {
+         // Get all questions
+         const qStore = db.transaction([STORE_QUESTIONS], 'readonly').objectStore(STORE_QUESTIONS);
+         const qReq = qStore.getAll();
+         
+         qReq.onsuccess = () => {
+             const questions = qReq.result as Question[];
+             // Filter those that actually need an image
+             const candidates = questions
+                .filter(q => q.visualSubject && q.visualSubject.length > 0)
+                .map(q => q.visualSubject!);
+             
+             const uniqueCandidates = [...new Set(candidates)];
+
+             // Get all existing image prompts (keys)
+             const iStore = db.transaction([STORE_IMAGES], 'readonly').objectStore(STORE_IMAGES);
+             const iReq = iStore.getAllKeys();
+             
+             iReq.onsuccess = () => {
+                 const existingPrompts = new Set(iReq.result as string[]);
+                 const missing = uniqueCandidates.filter(s => !existingPrompts.has(s));
+                 resolve(missing);
+             };
+             iReq.onerror = () => reject("Failed to read images");
+         };
+         qReq.onerror = () => reject("Failed to read questions");
+      });
+  }
 
   async getStorageEstimate(): Promise<StorageEstimate> {
     if (navigator.storage && navigator.storage.estimate) {

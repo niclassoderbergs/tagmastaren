@@ -622,6 +622,27 @@ export const batchGenerateQuestions = async (
   }
 };
 
+// Batch Image Generation
+export const batchGenerateImages = async (
+  prompts: string[],
+  onProgress: (completed: number) => void,
+  onError?: (errorMsg: string) => void
+): Promise<void> => {
+  for (let i = 0; i < prompts.length; i++) {
+      try {
+          // 5 second delay between generations to be safe with API limits
+          if (i > 0) await delay(5000);
+          
+          const prompt = prompts[i];
+          await generateRewardImage(prompt);
+          onProgress(i + 1);
+      } catch (e: any) {
+          console.error("Image batch gen failed", e);
+          if (onError) onError(e.message || "Fel vid bildgenerering");
+      }
+  }
+};
+
 export const generateQuestion = async (
   subject: Subject, 
   difficulty: number, 
