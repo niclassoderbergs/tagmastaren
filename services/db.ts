@@ -52,6 +52,45 @@ export interface StorageEstimate {
   percent: number;
 }
 
+// Helper to compress large images before cloud upload (Firestore 1MB limit)
+const compressBase64 = (base64: string): Promise<string> => {
+  return new Promise((resolve) => {
+    // Basic check: if it's not an image data URL, return as is
+    if (!base64.startsWith('data:image')) {
+        resolve(base64);
+        return;
+    }
+
+    const img = new Image();
+    img.src = base64;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const MAX_DIM = 1024; // Limit max dimension to ensure < 1MB
+      let width = img.width;
+      let height = img.height;
+      
+      // Keep aspect ratio but limit size
+      if (width > MAX_DIM || height > MAX_DIM) {
+        const ratio = Math.min(MAX_DIM / width, MAX_DIM / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          // Convert to JPEG with 0.7 quality (usually < 200KB)
+          resolve(canvas.toDataURL('image/jpeg', 0.7)); 
+      } else {
+          resolve(base64); // Fallback
+      }
+    };
+    img.onerror = () => resolve(base64); // Fallback
+  });
+};
+
 class TrainDB {
   private db: IDBDatabase | null = null;
   private firebaseApp: FirebaseApp | null = null;
@@ -277,26 +316,39 @@ class TrainDB {
   async saveImage(prompt: string, base64: string): Promise<void> {
     const db = await this.open();
     
+    // ALWAYS optimize/compress before saving anywhere
+    // This converts PNG to JPEG (quality 0.7) which is much smaller and efficient
+    let optimizedBase64 = base64;
+    try {
+        optimizedBase64 = await compressBase64(base64);
+    } catch (e) {
+        console.warn("Image optimization failed, falling back to original", e);
+    }
+
     // 1. Prune old images if LOCAL limit reached (keeps browser fast)
     await this.pruneImages(db);
 
-    // 2. Save new image to Cloud (Archive) - NO LIMIT here
+    // 2. Save to Cloud (Archive) - Using the optimized version
     if (this.firestore) {
-        // Encode prompt to be a valid document ID (safe for URLs)
         const safeId = encodeURIComponent(prompt); 
-        // Note: Firestore docs max 1MB. Base64 images usually fit (300KB-500KB).
-        setDoc(doc(this.firestore, 'images', safeId), {
-            prompt: prompt,
-            base64: base64,
-            timestamp: Date.now()
-        }, { merge: true }).catch(e => console.warn("Failed to save image to cloud", e));
+        
+        // Safety check for the 1MB limit (should rarely hit with JPEG)
+        if (optimizedBase64.length <= 1040000) {
+            setDoc(doc(this.firestore, 'images', safeId), {
+                prompt: prompt,
+                base64: optimizedBase64,
+                timestamp: Date.now()
+            }, { merge: true }).catch(e => console.warn("Failed to save image to cloud", e));
+        } else {
+            console.warn("Image too big for cloud even after optimization.");
+        }
     }
 
-    // 3. Save new image Locally
+    // 3. Save Locally (Now using the optimized version to save user disk space)
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([STORE_IMAGES], 'readwrite');
       const store = transaction.objectStore(STORE_IMAGES);
-      const record: ImageRecord = { prompt, base64, timestamp: Date.now() };
+      const record: ImageRecord = { prompt, base64: optimizedBase64, timestamp: Date.now() };
       const request = store.put(record);
 
       request.onsuccess = () => resolve();
@@ -480,22 +532,37 @@ class TrainDB {
             const batch = writeBatch(this.firestore);
             const chunk = images.slice(i, i + BATCH_SIZE);
             
-            chunk.forEach(img => {
-                if (img.base64 === 'BLOCKED') return; // Don't upload blocked flags necessarily, or handle differently
+            // Use for...of loop to allow await for compression
+            for (const img of chunk) {
+                if (img.base64 === 'BLOCKED') continue; 
                 
+                let finalBase64 = img.base64;
+                
+                // Always try to optimize/compress to save bandwidth and storage.
+                // This is especially important for syncing old images that might be raw PNGs.
+                try {
+                    finalBase64 = await compressBase64(finalBase64);
+                } catch (err) {
+                    console.warn("Compression failed during sync, trying original", err);
+                }
+                
+                // Double check size after potential compression
+                if (finalBase64.length > 1040000) {
+                    console.error(`Image too big to sync (${finalBase64.length} bytes): ${img.prompt}`);
+                    continue; 
+                }
+
                 const safeId = encodeURIComponent(img.prompt);
                 const docRef = doc(this.firestore!, 'images', safeId);
-                // Firestore doc limit is 1MB. We assume images fit.
+                
                 batch.set(docRef, {
                     prompt: img.prompt,
-                    base64: img.base64,
+                    base64: finalBase64,
                     timestamp: img.timestamp
                 }, { merge: true });
-            });
+            }
 
             await batch.commit();
-            // We don't count images in the returned "count" to keep UI simple, 
-            // or we could. Let's focus on question count for the return value as it's the main metric.
         }
     }
 
