@@ -606,6 +606,24 @@ export default function App() {
               />
             )}
 
+            {/* NEW LOCATION FOR CONTINUE BUTTON */}
+            {showExplanation && (
+               <div className="flex justify-center my-2 animate-fade-in z-20 relative">
+                 <button
+                   onClick={handleContinue}
+                   className={`text-white text-xl font-bold py-4 px-12 rounded-full shadow-lg transition-transform transform hover:-translate-y-1 animate-bounce uppercase ${
+                     missionProgress >= MISSION_TARGET && feedback.type === 'success'
+                      ? "bg-green-600 hover:bg-green-700 shadow-green-200" 
+                      : "bg-blue-600 hover:bg-blue-700 shadow-blue-200"
+                   }`}
+                 >
+                   {missionProgress >= MISSION_TARGET && feedback.type === 'success'
+                      ? "KOPPLA PÅ VAGNEN! 🚋" 
+                      : "NÄSTA UPPGIFT ➡"}
+                 </button>
+               </div>
+            )}
+
             <div className="bg-white rounded-3xl shadow-xl p-8 border-4 border-blue-100 relative overflow-hidden">
                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full -mr-16 -mt-16 opacity-50"></div>
                
@@ -636,10 +654,13 @@ export default function App() {
                    </button>
                  </div>
                </div>
-
-               <h2 className="text-2xl md:text-3xl font-bold text-slate-800 mb-8 text-center leading-snug relative z-10 uppercase">
-                 {currentQuestion.text}
-               </h2>
+               
+               {/* HIDE ORIGINAL QUESTION TEXT IF EXPLANATION IS SHOWN */}
+               {!showExplanation && (
+                 <h2 className="text-2xl md:text-3xl font-bold text-slate-800 mb-8 text-center leading-snug relative z-10 uppercase">
+                   {currentQuestion.text}
+                 </h2>
+               )}
 
                {currentQuestion.type === 'DRAG_AND_DROP' && currentQuestion.dragDropConfig ? (
                  !showExplanation ? (
@@ -678,23 +699,6 @@ export default function App() {
                        </button>
                      );
                    })}
-                 </div>
-               )}
-
-               {showExplanation && (
-                 <div className="mt-8 flex justify-center relative z-10">
-                   <button
-                     onClick={handleContinue}
-                     className={`text-white text-xl font-bold py-4 px-12 rounded-full shadow-lg transition-transform transform hover:-translate-y-1 animate-bounce uppercase ${
-                       missionProgress >= MISSION_TARGET && feedback.type === 'success'
-                        ? "bg-green-600 hover:bg-green-700 shadow-green-200" 
-                        : "bg-blue-600 hover:bg-blue-700 shadow-blue-200"
-                     }`}
-                   >
-                     {missionProgress >= MISSION_TARGET && feedback.type === 'success'
-                        ? "KOPPLA PÅ VAGNEN! 🚋" 
-                        : "NÄSTA UPPGIFT ➡"}
-                   </button>
                  </div>
                )}
             </div>
