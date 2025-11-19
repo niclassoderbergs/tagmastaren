@@ -304,13 +304,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
     }
   };
 
-  const handleCleanupCloud = async () => {
-    if (!confirm("Är du säker? Detta raderar dubbletter från moln-databasen permanent.")) return;
+  const handleCleanupCloud = async (useAi: boolean = false) => {
+    if (!confirm(useAi 
+       ? "Detta använder AI för att läsa igenom alla frågor och ta bort dubbletter. Det tar en stund. Är du säker?" 
+       : "Är du säker? Detta raderar exakta text-dubbletter från moln-databasen.")) return;
     
-    setCloudStatus("Letar dubbletter i molnet...");
+    setCloudStatus(useAi ? "Startar AI-analys..." : "Letar dubbletter i molnet...");
     setIsCleaning(true);
     try {
-      const deleted = await trainDb.cleanupDuplicatesCloud();
+      let deleted = 0;
+      if (useAi) {
+         deleted = await trainDb.cleanupDuplicatesCloudAI((msg) => setCloudStatus(msg));
+      } else {
+         deleted = await trainDb.cleanupDuplicatesCloud();
+      }
       setCloudStatus(`Städning klar! Raderade ${deleted} dubbletter.`);
       refreshCloudStats();
     } catch (e: any) {
@@ -724,12 +731,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                      </button>
                      
                      <button
-                        onClick={handleCleanupCloud}
+                        onClick={() => handleCleanupCloud(false)}
                         disabled={isCleaning}
                         className="flex-1 bg-white hover:bg-red-50 text-red-800 font-bold py-2 rounded-lg text-xs border border-red-200 active:scale-95 flex items-center justify-center gap-2"
-                        title="Rensa bort identiska frågor i molnet för att spara plats"
+                        title="Rensa bort exakta textdubbletter (Snabbt)"
                      >
-                       <span>🧹</span> {isCleaning ? "STÄDAR..." : "STÄDA DUBBLETTER (MOLN)"}
+                       <span>🧹</span> {isCleaning ? "STÄDAR..." : "SNABB STÄDNING"}
+                     </button>
+                   </div>
+
+                   <div className="flex gap-2 mb-2">
+                     <button
+                        onClick={() => handleCleanupCloud(true)}
+                        disabled={isCleaning}
+                        className="w-full bg-purple-100 hover:bg-purple-200 text-purple-900 font-bold py-2 rounded-lg text-xs border border-purple-300 active:scale-95 flex items-center justify-center gap-2 shadow-sm"
+                        title="Använd AI för att läsa och förstå vilka frågor som är dubbletter"
+                     >
+                       <span>🧠</span> {isCleaning ? "ANALYZERAR MED AI..." : "AI-STÄDNING (HITTAR INNEBÖRD)"}
                      </button>
                    </div>
 

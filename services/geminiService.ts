@@ -709,3 +709,65 @@ export const generateQuestion = async (
     };
   }
 };
+
+// --- AI DEDUPLICATION ---
+
+export const checkDuplicatesWithAI = async (questions: {id: string, text: string}[], subject: string): Promise<string[]> => {
+  if (questions.length < 2) return [];
+
+  // Schema for the output: list of IDs to delete
+  const duplicateSchema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+      idsToDelete: {
+        type: Type.ARRAY,
+        items: { type: Type.STRING },
+        description: "List of IDs belonging to questions that are redundant/duplicates."
+      }
+    }
+  };
+
+  const prompt = `
+    Du är en expert på att städa databaser för barn-appar.
+    Här är en lista med frågor inom ämnet: ${subject}.
+    Hitta dubbletter.
+    
+    REGLER FÖR ATT MARKERA EN FRÅGA SOM DUBBLETT (TA BORT):
+    1. SEMANTISK LIKHET: Om två frågor frågar om samma faktakunskap, ta bort den ena.
+       Exempel: "Vad händer vid 0 grader?" och "När fryser vatten?" -> DUBBLETT. Ta bort den som är sämst formulerad.
+    
+    2. MATEMATIK-REGEL (STRIKT):
+       Om siffrorna skiljer sig åt är det INTE en dublett.
+       "Vad är 1+1?" och "Vad är 2+2?" är INTE dubbletter. Behåll båda.
+       "Vad är 1+1?" och "1 plus 1 blir?" -> DUBBLETT.
+
+    3. STAVFEL:
+       Om en fråga ser ut att vara en felstavad version av en annan ("Vad häner" vs "Vad händer"), ta bort den felstavade.
+
+    Returnera en lista med IDs på de frågor som ska raderas. Behåll originalet.
+
+    INPUT JSON:
+    ${JSON.stringify(questions)}
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: duplicateSchema,
+        temperature: 0, // Low temp for strict logical analysis
+      },
+    });
+    
+    if (response.text) {
+        const result = JSON.parse(response.text);
+        return result.idsToDelete || [];
+    }
+    return [];
+  } catch (e) {
+    console.error("AI Deduplication failed", e);
+    return [];
+  }
+};

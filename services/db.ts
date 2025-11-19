@@ -2,6 +2,7 @@
 import { Question, Subject, FirebaseConfig } from '../types';
 import { initializeApp, FirebaseApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, Firestore, doc, setDoc, getDocs, collection, writeBatch, getCountFromServer, deleteDoc } from 'firebase/firestore';
+import { checkDuplicatesWithAI } from './geminiService';
 
 const DB_NAME = 'TrainMasterDB';
 const DB_VERSION = 1;
@@ -764,6 +765,78 @@ class TrainDB {
     }
 
     return deletedCount;
+  }
+  
+  /**
+   * ADVANCED CLEANUP: Uses Gemini to find duplicates semantically.
+   */
+  async cleanupDuplicatesCloudAI(onProgress?: (msg: string) => void): Promise<number> {
+    if (!this.firestore) throw new Error("Molnet ej konfigurerat (Firebase)");
+
+    // 1. Fetch all questions
+    if (onProgress) onProgress("Hämtar alla frågor från molnet...");
+    const querySnapshot = await getDocs(collection(this.firestore, 'questions'));
+    if (querySnapshot.empty) return 0;
+    
+    const allQuestions: (Question & {subject: string})[] = [];
+    querySnapshot.forEach(doc => allQuestions.push({ ...doc.data(), id: doc.id } as any));
+
+    const subjectGroups: Record<string, typeof allQuestions> = {};
+    
+    // 2. Group by Subject
+    for (const q of allQuestions) {
+      const s = q.subject || 'UNKNOWN';
+      if (!subjectGroups[s]) subjectGroups[s] = [];
+      subjectGroups[s].push(q);
+    }
+
+    const allIdsToDelete: string[] = [];
+
+    // 3. Iterate subjects
+    // Note: We only use AI for Logic, Language, Physics. Math is safer with the algorithmic check.
+    const subjectsToScan = [Subject.LANGUAGE, Subject.LOGIC, Subject.PHYSICS, Subject.MATH];
+
+    for (const subject of subjectsToScan) {
+       const group = subjectGroups[subject] || [];
+       if (group.length < 2) continue;
+
+       // 4. Batch logic for AI context window
+       // Sending ~80 questions at a time is safe for Flash context
+       const BATCH_SIZE = 80;
+       
+       for (let i = 0; i < group.length; i += BATCH_SIZE) {
+          if (onProgress) onProgress(`Analyserar ${subject} (${i}-${Math.min(i+BATCH_SIZE, group.length)})...`);
+          
+          const batch = group.slice(i, i + BATCH_SIZE);
+          
+          // Simplify data sent to AI to save tokens
+          const simplifiedBatch = batch.map(q => ({
+             id: q.id,
+             text: q.text
+          }));
+
+          const duplicates = await checkDuplicatesWithAI(simplifiedBatch, subject);
+          if (duplicates && duplicates.length > 0) {
+              allIdsToDelete.push(...duplicates);
+          }
+       }
+    }
+
+    if (allIdsToDelete.length === 0) return 0;
+
+    // 5. Delete
+    if (onProgress) onProgress(`Raderar ${allIdsToDelete.length} dubbletter...`);
+    const DELETE_BATCH_SIZE = 400;
+    for (let i = 0; i < allIdsToDelete.length; i += DELETE_BATCH_SIZE) {
+        const batch = writeBatch(this.firestore);
+        const chunk = allIdsToDelete.slice(i, i + DELETE_BATCH_SIZE);
+        chunk.forEach(id => {
+             batch.delete(doc(this.firestore!, 'questions', id));
+        });
+        await batch.commit();
+    }
+
+    return allIdsToDelete.length;
   }
 
   /**
