@@ -1,6 +1,6 @@
 import { Question, Subject, FirebaseConfig } from '../types';
 import { initializeApp, FirebaseApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, Firestore, doc, setDoc, getDocs, collection, writeBatch } from 'firebase/firestore';
+import { getFirestore, Firestore, doc, setDoc, getDocs, collection, writeBatch, getCountFromServer } from 'firebase/firestore';
 
 const DB_NAME = 'TrainMasterDB';
 const DB_VERSION = 1;
@@ -297,9 +297,10 @@ class TrainDB {
   async getCloudQuestionCount(): Promise<number> {
     if (!this.firestore) return -1;
     try {
-      // getDocs grabs all headers, effectively counting them
-      const querySnapshot = await getDocs(collection(this.firestore, 'questions'));
-      return querySnapshot.size;
+      // Efficient server-side counting
+      const coll = collection(this.firestore, 'questions');
+      const snapshot = await getCountFromServer(coll);
+      return snapshot.data().count;
     } catch (e) {
       console.error("Failed to check cloud count", e);
       return -1;

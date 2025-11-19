@@ -32,6 +32,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
   const [cloudStatus, setCloudStatus] = useState<string>("");
   const [tempFirebaseConfig, setTempFirebaseConfig] = useState<string>("");
   
+  // Cloud Stats
+  const [cloudCount, setCloudCount] = useState<number | null>(null);
+  const [checkingCloud, setCheckingCloud] = useState(false);
+
   // Generator State
   const [isGenerating, setIsGenerating] = useState(false);
   const [genProgress, setGenProgress] = useState(0);
@@ -50,7 +54,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
     if (settings.firebaseConfig) {
         setTempFirebaseConfig(JSON.stringify(settings.firebaseConfig, null, 2));
     }
+
+    // Auto-check cloud on open if connected
+    if (trainDb.isCloudConnected()) {
+      refreshCloudStats();
+    }
   }, [settings.firebaseConfig, isEnvConnected]);
+
+  const refreshCloudStats = async () => {
+    setCheckingCloud(true);
+    const count = await trainDb.getCloudQuestionCount();
+    setCloudCount(count);
+    setCheckingCloud(false);
+  };
 
   const updateDifficulty = (subject: Subject, change: number) => {
     const current = settings.subjectDifficulty[subject];
@@ -148,6 +164,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
         });
         trainDb.initCloud(config);
         setCloudStatus("Konfiguration sparad!");
+        refreshCloudStats();
     } catch (e) {
         setCloudStatus("Felaktig JSON!");
     }
@@ -169,19 +186,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
         setCloudStatus(`Hämtade ${count} frågor från molnet!`);
       }
       trainDb.getDatabaseStats().then(setDbStats);
+      refreshCloudStats();
     } catch (e: any) {
       console.error(e);
       setCloudStatus("Fel: " + e.message);
-    }
-  };
-
-  const handleCheckCloud = async () => {
-    setCloudStatus("Kontrollerar...");
-    const count = await trainDb.getCloudQuestionCount();
-    if (count === -1) {
-      setCloudStatus("Kunde inte nå databasen.");
-    } else {
-      setCloudStatus(`✅ Hittade ${count} frågor i molnet.`);
     }
   };
 
@@ -194,6 +202,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
       console.error(e);
       setCloudStatus("❌ Fel: " + e.message);
     }
+  };
+
+  const getTotalLocalQuestions = () => {
+    if (!dbStats) return 0;
+    return dbStats.mathCount + dbStats.languageCount + dbStats.logicCount + dbStats.physicsCount;
   };
 
   return (
@@ -244,12 +257,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                   <div className="bg-red-50 p-2 rounded text-xs font-mono text-red-800 break-all border border-red-100">
                     Felmeddelande: {connectionErrorMsg}
                   </div>
-                )}
-
-                {hasKey && (
-                  <p className="text-[10px] text-slate-400 leading-tight mt-2">
-                    🔒 Tips: Begränsa din API-nyckel i Google Cloud Console till din webbplatsadress för extra säkerhet.
-                  </p>
                 )}
              </div>
           </div>
@@ -326,10 +333,95 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
             </div>
           </div>
 
+          {/* CLOUD SYNC SECTION - FIREBASE */}
+          <div className="bg-orange-50 p-4 rounded-xl border-2 border-orange-100">
+             <h3 className="font-bold text-orange-900 text-lg mb-2 border-b border-orange-200 pb-2">2. DATABAS (FIREBASE)</h3>
+             <p className="text-xs text-orange-800 mb-4">
+               Spara frågor säkert i Googles moln. <strong>Obs:</strong> Bilder sparas bara lokalt för att spara utrymme.
+             </p>
+             
+             {isEnvConnected ? (
+               <div className="bg-white/50 p-2 rounded mb-4 text-center border border-orange-200">
+                 <span className="text-sm text-orange-800 font-bold">✅ ANSLUTEN VIA .ENV FIL</span>
+               </div>
+             ) : (
+               <div className="space-y-2 mb-4">
+                 <textarea 
+                   placeholder='Klistra in { "apiKey": "...", ... }' 
+                   value={tempFirebaseConfig}
+                   onChange={(e) => setTempFirebaseConfig(e.target.value)}
+                   className="w-full p-2 rounded border border-orange-200 text-xs font-mono h-24"
+                 />
+                 <button 
+                    onClick={handleSaveFirebaseConfig}
+                    className="w-full bg-orange-100 hover:bg-orange-200 text-orange-800 font-bold py-1 rounded border border-orange-300 text-xs"
+                 >
+                    SPARA KONFIGURATION
+                 </button>
+               </div>
+             )}
+
+             {/* Status Compare Section */}
+             {(isEnvConnected || settings.firebaseConfig) && (
+                <div className="grid grid-cols-2 gap-2 mb-4 text-xs">
+                    <div className="bg-white p-2 rounded border border-orange-200 text-center">
+                        <div className="text-orange-600 font-bold">LOKALT PÅ DATORN</div>
+                        <div className="text-2xl font-black text-slate-700">{getTotalLocalQuestions()}</div>
+                        <div className="text-slate-400">frågor</div>
+                    </div>
+                    <div className="bg-white p-2 rounded border border-orange-200 text-center">
+                        <div className="text-orange-600 font-bold">I MOLNET (FIREBASE)</div>
+                        <div className="text-2xl font-black text-slate-700">
+                            {checkingCloud ? "..." : (cloudCount !== null ? cloudCount : "?")}
+                        </div>
+                        <div className="text-slate-400">frågor</div>
+                    </div>
+                </div>
+             )}
+             
+             <div className="flex gap-2 mb-3">
+                <button
+                  onClick={() => handleCloudSync('up')}
+                  className={`flex-1 font-bold py-3 rounded-lg text-sm shadow-sm active:scale-95 transition-all ${
+                     (cloudCount !== null && getTotalLocalQuestions() > cloudCount) 
+                     ? "bg-orange-600 hover:bg-orange-700 text-white animate-pulse" 
+                     : "bg-orange-500 hover:bg-orange-600 text-white"
+                  }`}
+                >
+                  ⬇ SPARA TILL MOLN
+                  {(cloudCount !== null && getTotalLocalQuestions() > cloudCount) && (
+                      <div className="text-[10px] opacity-90 font-normal">Du har osparad data!</div>
+                  )}
+                </button>
+                <button
+                  onClick={() => handleCloudSync('down')}
+                  className="flex-1 bg-white hover:bg-orange-100 text-orange-800 font-bold py-3 rounded-lg border border-orange-300 text-sm shadow-sm active:scale-95"
+                >
+                  ⬆ HÄMTA FRÅN MOLN
+                </button>
+             </div>
+
+             <div className="flex gap-2">
+               <button
+                  onClick={handleSendTestData}
+                  className="flex-1 bg-white hover:bg-red-50 text-red-800 font-bold py-2 rounded-lg text-xs border border-red-200 active:scale-95 flex items-center justify-center gap-2"
+                  title="Skapa en test-post i databasen för att se att allt fungerar"
+               >
+                 <span>🧪</span> SKICKA TESTDATA (PING)
+               </button>
+             </div>
+
+             {cloudStatus && (
+                <div className="mt-2 text-center text-xs font-bold text-orange-800 bg-white/50 p-1 rounded">
+                  {cloudStatus}
+                </div>
+             )}
+          </div>
+
           <div className="bg-amber-50 p-4 rounded-xl border-2 border-amber-100">
              <h3 className="font-bold text-amber-900 text-lg mb-2 border-b border-amber-200 pb-2">⚡ TURBO-LADDA DATABASEN</h3>
              <p className="text-xs text-amber-800 mb-4">
-               Skapa frågor nu så din son slipper vänta! Frågorna sparas i din webbläsare.
+               Skapa frågor nu så din son slipper vänta! Frågorna sparas i din webbläsare och kan sen skickas till molnet.
              </p>
              
              {isGenerating ? (
@@ -360,73 +452,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                    +20 FRÅGOR
                  </button>
                </div>
-             )}
-          </div>
-
-          {/* CLOUD SYNC SECTION - FIREBASE */}
-          <div className="bg-orange-50 p-4 rounded-xl border-2 border-orange-100">
-             <h3 className="font-bold text-orange-900 text-lg mb-2 border-b border-orange-200 pb-2">2. DATABAS (FIREBASE)</h3>
-             <p className="text-xs text-orange-800 mb-4">
-               Spara frågor säkert i Googles moln. <strong>Obs:</strong> Bilder sparas bara lokalt för att spara utrymme.
-             </p>
-             
-             {isEnvConnected ? (
-               <div className="bg-white/50 p-2 rounded mb-4 text-center border border-orange-200">
-                 <span className="text-sm text-orange-800 font-bold">✅ ANSLUTEN VIA .ENV FIL</span>
-               </div>
-             ) : (
-               <div className="space-y-2 mb-4">
-                 <textarea 
-                   placeholder='Klistra in { "apiKey": "...", ... }' 
-                   value={tempFirebaseConfig}
-                   onChange={(e) => setTempFirebaseConfig(e.target.value)}
-                   className="w-full p-2 rounded border border-orange-200 text-xs font-mono h-24"
-                 />
-                 <button 
-                    onClick={handleSaveFirebaseConfig}
-                    className="w-full bg-orange-100 hover:bg-orange-200 text-orange-800 font-bold py-1 rounded border border-orange-300 text-xs"
-                 >
-                    SPARA KONFIGURATION
-                 </button>
-               </div>
-             )}
-             
-             <div className="flex gap-2 mb-3">
-                <button
-                  onClick={() => handleCloudSync('up')}
-                  className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 rounded-lg text-sm shadow-sm active:scale-95"
-                >
-                  ⬇ SPARA TILL MOLN
-                </button>
-                <button
-                  onClick={() => handleCloudSync('down')}
-                  className="flex-1 bg-white hover:bg-orange-100 text-orange-800 font-bold py-2 rounded-lg border border-orange-300 text-sm shadow-sm active:scale-95"
-                >
-                  ⬆ HÄMTA FRÅN MOLN
-                </button>
-             </div>
-
-             <div className="flex gap-2">
-               <button
-                  onClick={handleCheckCloud}
-                  className="flex-1 bg-orange-100 hover:bg-orange-200 text-orange-900 font-bold py-2 rounded-lg text-sm border border-orange-300 active:scale-95 flex items-center justify-center gap-2"
-               >
-                 <span>🔍</span> KONTROLLERA
-               </button>
-               
-               <button
-                  onClick={handleSendTestData}
-                  className="flex-1 bg-white hover:bg-red-50 text-red-800 font-bold py-2 rounded-lg text-sm border border-red-200 active:scale-95 flex items-center justify-center gap-2"
-                  title="Skapa en test-post i databasen för att se att allt fungerar"
-               >
-                 <span>🧪</span> SKICKA TESTDATA
-               </button>
-             </div>
-
-             {cloudStatus && (
-                <div className="mt-2 text-center text-xs font-bold text-orange-800 animate-pulse bg-white/50 p-1 rounded">
-                  {cloudStatus}
-                </div>
              )}
           </div>
 
