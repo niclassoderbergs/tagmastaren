@@ -211,6 +211,12 @@ export const testApiKey = async (): Promise<{ success: boolean; message?: string
     return { success: true };
   } catch (error: any) {
     console.warn("API Key Test Failed:", error);
+    
+    const msg = error.message || String(error);
+    if (msg.includes('expired') || msg.includes('API_KEY_INVALID')) {
+        return { success: false, message: "Din API-nyckel har gått ut. Skapa en ny hos Google." };
+    }
+
     return { success: false, message: error.message || "Unknown API error" };
   }
 };
@@ -480,9 +486,15 @@ export const batchGenerateQuestions = async (
          if (onError) onError(`Kvot överskriden (429). Vänta en stund. Detaljer: ${msg}`);
          break; // Stop batch
       }
-      // Identify API Key issues
+      
+      // Identify specific API Key issues (Expired / Invalid)
+      if (msg.includes('expired') || msg.includes('API_KEY_INVALID') || msg.includes('API key not valid')) {
+         if (onError) onError(`DIN API-NYCKEL HAR GÅTT UT. Du måste skapa en ny nyckel hos Google AI Studio och uppdatera den i dina 'Environment Variables' där du kör appen.`);
+         break;
+      }
+      
       if (msg.includes('API key') || msg.includes('403')) {
-         if (onError) onError(`Nyckelfel: ${msg}. Kontrollera att din API_KEY i .env är giltig.`);
+         if (onError) onError(`Nyckelfel: Kontrollera att din API_KEY i .env är giltig.`);
          break; 
       }
       
