@@ -1,14 +1,29 @@
+
 import { GoogleGenAI, Type, Schema, Modality } from "@google/genai";
 import { Subject, Question, QuestionType } from "../types";
 import { trainDb } from "./db";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Helper to clean key if user accidentally pasted quotes in Vercel
+const getCleanApiKey = () => {
+  const key = process.env.API_KEY || "";
+  return key.replace(/["']/g, "").trim();
+};
+
+const apiKey = getCleanApiKey();
+const ai = new GoogleGenAI({ apiKey: apiKey });
 
 // In-memory fallback only used for very first load if DB is empty and API fails
 const imageCache = new Map<string, string>(); // Keep a small RAM cache for immediate reuse in session
 
 // --- AUDIO CONTEXT FOR TTS ---
 let audioContext: AudioContext | null = null;
+
+// --- HELPER: DEBUG KEY ---
+export const getApiKeyDebug = (): string => {
+  if (!apiKey) return "SAKNAS";
+  if (apiKey.length < 5) return "*****";
+  return "..." + apiKey.slice(-4);
+};
 
 // --- FALLBACK QUESTIONS (Static safety net) ---
 const FALLBACK_QUESTIONS: Omit<Question, 'id'>[] = [
@@ -200,7 +215,7 @@ const generateDragDropQuestion = (difficulty: number): Question => {
 export const testApiKey = async (): Promise<{ success: boolean; message?: string }> => {
   try {
     // Minimal request to check auth and project validity
-    if (!process.env.API_KEY) {
+    if (!apiKey) {
       return { success: false, message: "API Key is missing (process.env.API_KEY is empty)" };
     }
 

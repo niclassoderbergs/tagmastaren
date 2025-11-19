@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { AppSettings, Subject, FirebaseConfig } from '../types';
 import { trainDb, DbStats } from '../services/db';
-import { testApiKey, batchGenerateQuestions } from '../services/geminiService';
+import { testApiKey, batchGenerateQuestions, getApiKeyDebug } from '../services/geminiService';
 
 interface SettingsModalProps {
   settings: AppSettings;
@@ -44,6 +45,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
 
   const hasKey = Boolean(process.env.API_KEY);
   const isEnvConnected = trainDb.isCloudConnected();
+  const keyDebug = getApiKeyDebug();
 
   // Initialize DB cloud connection if settings exist manually
   useEffect(() => {
@@ -252,9 +254,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
              <h3 className="font-bold text-slate-800 text-lg">1. AI-MOTORN (Google Gemini)</h3>
              <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-center space-y-3">
                 <div className="text-xs text-slate-500 flex justify-center gap-2">
-                   NYCKEL-STATUS: 
-                   <span className={hasKey ? "text-green-600 font-bold" : "text-red-600 font-bold"}>
-                     {hasKey ? "HITTAD (Env)" : "SAKNAS"}
+                   LADDAD NYCKEL: 
+                   <span className={hasKey ? "text-slate-700 font-mono font-bold" : "text-red-600 font-bold"}>
+                     {keyDebug}
                    </span>
                 </div>
                 <button 
