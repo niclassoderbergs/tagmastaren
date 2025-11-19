@@ -7,6 +7,7 @@ const DB_NAME = 'TrainMasterDB';
 const DB_VERSION = 1;
 const STORE_QUESTIONS = 'questions';
 const STORE_IMAGES = 'images';
+const MAX_STORED_IMAGES = 50; // Keep last 50 images LOCALLY to save RAM/Storage
 
 // SECURITY WARNING: Never hardcode API keys here. 
 // Use environment variables (VITE_FIREBASE_...) in a .env.local file.
@@ -38,6 +39,17 @@ export interface DbStats {
   logicCount: number;
   physicsCount: number;
   imageCount: number;
+}
+
+export interface CloudStats {
+  questions: number;
+  images: number;
+}
+
+export interface StorageEstimate {
+  usage: number; // bytes
+  quota: number; // bytes
+  percent: number;
 }
 
 class TrainDB {
@@ -118,7 +130,11 @@ class TrainDB {
 
         // Store for Images (Key is the prompt/visualSubject)
         if (!db.objectStoreNames.contains(STORE_IMAGES)) {
-          db.createObjectStore(STORE_IMAGES, { keyPath: 'prompt' });
+          const iStore = db.createObjectStore(STORE_IMAGES, { keyPath: 'prompt' });
+          iStore.createIndex('timestamp', 'timestamp', { unique: false });
+        } else {
+           // Migration for existing DBs if they lack index (simple fallback)
+           // In a prod app we would handle versioning carefully
         }
       };
     });
@@ -260,6 +276,23 @@ class TrainDB {
 
   async saveImage(prompt: string, base64: string): Promise<void> {
     const db = await this.open();
+    
+    // 1. Prune old images if LOCAL limit reached (keeps browser fast)
+    await this.pruneImages(db);
+
+    // 2. Save new image to Cloud (Archive) - NO LIMIT here
+    if (this.firestore) {
+        // Encode prompt to be a valid document ID (safe for URLs)
+        const safeId = encodeURIComponent(prompt); 
+        // Note: Firestore docs max 1MB. Base64 images usually fit (300KB-500KB).
+        setDoc(doc(this.firestore, 'images', safeId), {
+            prompt: prompt,
+            base64: base64,
+            timestamp: Date.now()
+        }, { merge: true }).catch(e => console.warn("Failed to save image to cloud", e));
+    }
+
+    // 3. Save new image Locally
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([STORE_IMAGES], 'readwrite');
       const store = transaction.objectStore(STORE_IMAGES);
@@ -267,12 +300,56 @@ class TrainDB {
       const request = store.put(record);
 
       request.onsuccess = () => resolve();
-      request.onerror = () => reject("Failed to save image");
+      request.onerror = () => reject("Failed to save image locally");
+    });
+  }
+
+  private async pruneImages(db: IDBDatabase): Promise<void> {
+    return new Promise((resolve) => {
+      const transaction = db.transaction([STORE_IMAGES], 'readwrite');
+      const store = transaction.objectStore(STORE_IMAGES);
+      
+      // Check count
+      const countReq = store.count();
+      
+      countReq.onsuccess = () => {
+        if (countReq.result >= MAX_STORED_IMAGES) {
+          // Strategy: Get all, sort in JS, delete oldest LOCALLY.
+          const allReq = store.getAll();
+          allReq.onsuccess = () => {
+             const allImgs = allReq.result as ImageRecord[];
+             if (allImgs.length >= MAX_STORED_IMAGES) {
+                // Sort by timestamp ascending (oldest first)
+                allImgs.sort((a, b) => a.timestamp - b.timestamp);
+                
+                // Calculate how many to remove
+                const targetDelete = countReq.result - MAX_STORED_IMAGES + 1;
+                const toRemove = allImgs.slice(0, targetDelete);
+                
+                toRemove.forEach(img => {
+                   store.delete(img.prompt);
+                });
+             }
+             resolve();
+          };
+        } else {
+          resolve();
+        }
+      };
+      
+      countReq.onerror = () => resolve(); // Fail safe
     });
   }
 
   async blockImage(prompt: string): Promise<void> {
-    return this.saveImage(prompt, "BLOCKED");
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_IMAGES], 'readwrite');
+        const store = transaction.objectStore(STORE_IMAGES);
+        const record: ImageRecord = { prompt, base64: "BLOCKED", timestamp: Date.now() };
+        store.put(record).onsuccess = () => resolve();
+        store.put(record).onerror = () => reject("Failed to block");
+    });
   }
 
   async getImage(prompt: string): Promise<string | null> {
@@ -290,23 +367,55 @@ class TrainDB {
     });
   }
 
+  async getStorageEstimate(): Promise<StorageEstimate> {
+    if (navigator.storage && navigator.storage.estimate) {
+      try {
+        const estimate = await navigator.storage.estimate();
+        const usage = estimate.usage || 0;
+        const quota = estimate.quota || 1024 * 1024 * 1024; // Default 1GB if unknown
+        return {
+          usage,
+          quota,
+          percent: Math.round((usage / quota) * 100)
+        };
+      } catch (e) {
+        console.warn("Storage estimate failed", e);
+      }
+    }
+    return { usage: 0, quota: 0, percent: 0 };
+  }
+
   // --- CLOUD SYNC (FIREBASE) ---
 
   /**
-   * Checks how many questions are currently stored in the cloud.
-   * Returns -1 if not connected or error.
+   * Checks how many questions AND images are currently stored in the cloud.
    */
-  async getCloudQuestionCount(): Promise<number> {
-    if (!this.firestore) return -1;
+  async getCloudStats(): Promise<CloudStats> {
+    if (!this.firestore) return { questions: -1, images: -1 };
     try {
       // Efficient server-side counting
-      const coll = collection(this.firestore, 'questions');
-      const snapshot = await getCountFromServer(coll);
-      return snapshot.data().count;
+      const qColl = collection(this.firestore, 'questions');
+      const qSnapshot = await getCountFromServer(qColl);
+      
+      const iColl = collection(this.firestore, 'images');
+      const iSnapshot = await getCountFromServer(iColl);
+
+      return { 
+          questions: qSnapshot.data().count,
+          images: iSnapshot.data().count
+      };
     } catch (e) {
       console.error("Failed to check cloud count", e);
-      return -1;
+      return { questions: -1, images: -1 };
     }
+  }
+
+  /**
+   * Deprecated: Use getCloudStats instead for full picture
+   */
+  async getCloudQuestionCount(): Promise<number> {
+     const stats = await this.getCloudStats();
+     return stats.questions;
   }
 
   /**
@@ -326,8 +435,9 @@ class TrainDB {
   async syncLocalToCloud(): Promise<number> {
     if (!this.firestore) throw new Error("Molnet ej konfigurerat (Firebase)");
 
-    // Get all local questions
+    // 1. Get all local questions AND images
     const db = await this.open();
+    
     const questions: any[] = await new Promise((resolve) => {
       const transaction = db.transaction([STORE_QUESTIONS], 'readonly');
       const store = transaction.objectStore(STORE_QUESTIONS);
@@ -335,25 +445,58 @@ class TrainDB {
       req.onsuccess = () => resolve(req.result);
     });
 
-    if (questions.length === 0) return 0;
+    const images: ImageRecord[] = await new Promise((resolve) => {
+        const transaction = db.transaction([STORE_IMAGES], 'readonly');
+        const store = transaction.objectStore(STORE_IMAGES);
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result);
+    });
 
-    // Firebase Batch Write (Max 500 per batch)
-    let syncedCount = 0;
+    if (questions.length === 0 && images.length === 0) return 0;
+
     const BATCH_SIZE = 400; 
+    let syncedCount = 0;
     
-    for (let i = 0; i < questions.length; i += BATCH_SIZE) {
-      const batch = writeBatch(this.firestore);
-      const chunk = questions.slice(i, i + BATCH_SIZE);
-      
-      chunk.forEach(q => {
-        const docRef = doc(this.firestore!, 'questions', q.id);
-        // Ensure we don't have undefined values, convert to plain object
-        const safeData = JSON.parse(JSON.stringify(q));
-        batch.set(docRef, safeData, { merge: true });
-      });
+    // --- SYNC QUESTIONS ---
+    if (questions.length > 0) {
+        for (let i = 0; i < questions.length; i += BATCH_SIZE) {
+            const batch = writeBatch(this.firestore);
+            const chunk = questions.slice(i, i + BATCH_SIZE);
+            
+            chunk.forEach(q => {
+                const docRef = doc(this.firestore!, 'questions', q.id);
+                const safeData = JSON.parse(JSON.stringify(q));
+                batch.set(docRef, safeData, { merge: true });
+            });
 
-      await batch.commit();
-      syncedCount += chunk.length;
+            await batch.commit();
+            syncedCount += chunk.length;
+        }
+    }
+
+    // --- SYNC IMAGES ---
+    if (images.length > 0) {
+        for (let i = 0; i < images.length; i += BATCH_SIZE) {
+            const batch = writeBatch(this.firestore);
+            const chunk = images.slice(i, i + BATCH_SIZE);
+            
+            chunk.forEach(img => {
+                if (img.base64 === 'BLOCKED') return; // Don't upload blocked flags necessarily, or handle differently
+                
+                const safeId = encodeURIComponent(img.prompt);
+                const docRef = doc(this.firestore!, 'images', safeId);
+                // Firestore doc limit is 1MB. We assume images fit.
+                batch.set(docRef, {
+                    prompt: img.prompt,
+                    base64: img.base64,
+                    timestamp: img.timestamp
+                }, { merge: true });
+            });
+
+            await batch.commit();
+            // We don't count images in the returned "count" to keep UI simple, 
+            // or we could. Let's focus on question count for the return value as it's the main metric.
+        }
     }
 
     return syncedCount;
@@ -361,6 +504,10 @@ class TrainDB {
 
   async syncCloudToLocal(): Promise<number> {
     if (!this.firestore) throw new Error("Molnet ej konfigurerat (Firebase)");
+
+    // NOTE: We only sync QUESTIONS downwards. 
+    // Syncing 3000 images downwards would crash the browser storage/memory.
+    // Images are treated as "Cloud Archive".
 
     const querySnapshot = await getDocs(collection(this.firestore, 'questions'));
     
@@ -373,7 +520,6 @@ class TrainDB {
     let count = 0;
     querySnapshot.forEach((doc) => {
       const data = doc.data();
-      // Ensure correct type mapping if needed, Firestore returns standard JSON
       store.put(data);
       count++;
     });

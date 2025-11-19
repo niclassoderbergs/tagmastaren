@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Subject, Question, TrainCar, GameState, AppSettings, QuestionType } from './types';
 import { generateQuestion, generateRewardImage, playTextAsSpeech, markQuestionTooHard, removeBadImage } from './services/geminiService';
@@ -44,6 +45,12 @@ const DEFAULT_SETTINGS: AppSettings = {
   }
 };
 
+const INITIAL_GAME_STATE: GameState = {
+  score: 0,
+  cars: [{ id: 'loco', type: 'LOCOMOTIVE', color: 'red' }], // Start with just the engine
+  currentStreak: 0,
+};
+
 const MissionProgress = ({ current, target }: { current: number, target: number }) => (
   <div className="flex items-center gap-2 mb-4 justify-center bg-blue-50 py-3 px-6 rounded-full border border-blue-100 mx-auto w-fit">
     <span className="text-blue-800 font-bold mr-2 text-sm">UPPDRAG:</span>
@@ -65,10 +72,19 @@ const MissionProgress = ({ current, target }: { current: number, target: number 
 );
 
 export default function App() {
-  const [gameState, setGameState] = useState<GameState>({
-    score: 0,
-    cars: [{ id: 'loco', type: 'LOCOMOTIVE', color: 'red' }], // Start with just the engine
-    currentStreak: 0,
+  // Initialize GameState from LocalStorage if available
+  const [gameState, setGameState] = useState<GameState>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('trainMasterState');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error("Failed to parse saved game state");
+        }
+      }
+    }
+    return INITIAL_GAME_STATE;
   });
 
   const [settings, setSettings] = useState<AppSettings>(() => {
@@ -103,9 +119,15 @@ export default function App() {
   // Audio State
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
+  // Persist Settings
   useEffect(() => {
     localStorage.setItem('trainMasterSettings', JSON.stringify(settings));
   }, [settings]);
+
+  // Persist Game State (Train & Score)
+  useEffect(() => {
+    localStorage.setItem('trainMasterState', JSON.stringify(gameState));
+  }, [gameState]);
 
   // --- BUFFER MANAGEMENT ---
 
@@ -384,6 +406,12 @@ export default function App() {
     setPreloadedRewardImage(null);
   };
 
+  const handleResetTrain = () => {
+    if (confirm("Vill du verkligen starta om tåget från noll?")) {
+       setGameState(INITIAL_GAME_STATE);
+    }
+  };
+
   const Header = ({ showScore = true }) => (
     <div className="bg-white p-4 shadow-sm flex justify-between items-center z-20 relative">
       <h1 className="text-2xl font-bold text-blue-900 flex items-center gap-2 uppercase">
@@ -455,6 +483,16 @@ export default function App() {
               onClick={() => handleStartMission(Subject.LOGIC)} 
             />
           </div>
+
+          {/* Reset Button (Hidden-ish) */}
+          {gameState.cars.length > 1 && (
+             <button 
+               onClick={handleResetTrain}
+               className="mt-10 text-slate-400 text-xs hover:text-red-500 underline uppercase"
+             >
+               Starta om tåget från början
+             </button>
+          )}
         </div>
       </Layout>
     );

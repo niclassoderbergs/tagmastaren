@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AppSettings, Subject, FirebaseConfig } from '../types';
-import { trainDb, DbStats } from '../services/db';
+import { trainDb, DbStats, StorageEstimate, CloudStats } from '../services/db';
 import { testApiKey, batchGenerateQuestions, getApiKeyDebug, setRuntimeApiKey, clearRuntimeApiKey, getKeySource, toggleBlockEnvKey, isEnvKeyBlocked } from '../services/geminiService';
 
 interface SettingsModalProps {
@@ -28,6 +28,7 @@ const LEVEL_LABELS: Record<number, string> = {
 export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdateSettings, onClose }) => {
   const [backupStatus, setBackupStatus] = useState<string>("");
   const [dbStats, setDbStats] = useState<DbStats | null>(null);
+  const [storageEst, setStorageEst] = useState<StorageEstimate | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [connectionErrorMsg, setConnectionErrorMsg] = useState<string>("");
   const [cloudStatus, setCloudStatus] = useState<string>("");
@@ -42,7 +43,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
   }, []);
   
   // Cloud Stats
-  const [cloudCount, setCloudCount] = useState<number | null>(null);
+  const [cloudStats, setCloudStats] = useState<CloudStats | null>(null);
   const [checkingCloud, setCheckingCloud] = useState(false);
 
   // Generator State
@@ -64,7 +65,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
     if (!isEnvConnected && settings.firebaseConfig) {
       trainDb.initCloud(settings.firebaseConfig);
     }
+    
+    // Load Stats and Storage
     trainDb.getDatabaseStats().then(setDbStats);
+    trainDb.getStorageEstimate().then(setStorageEst);
     
     if (settings.firebaseConfig) {
         setTempFirebaseConfig(JSON.stringify(settings.firebaseConfig, null, 2));
@@ -78,8 +82,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
 
   const refreshCloudStats = async () => {
     setCheckingCloud(true);
-    const count = await trainDb.getCloudQuestionCount();
-    setCloudCount(count);
+    const stats = await trainDb.getCloudStats();
+    setCloudStats(stats);
     setCheckingCloud(false);
   };
 
@@ -121,6 +125,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
     
     setIsGenerating(false);
     trainDb.getDatabaseStats().then(setDbStats);
+    trainDb.getStorageEstimate().then(setStorageEst);
   };
 
   const handleExport = async () => {
@@ -228,10 +233,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
       setCloudStatus("Synkroniserar...");
       if (direction === 'up') {
         const count = await trainDb.syncLocalToCloud();
-        setCloudStatus(`Skickade ${count} frågor till molnet!`);
+        setCloudStatus(`Skickade frågor och bilder till molnet!`);
       } else {
         const count = await trainDb.syncCloudToLocal();
-        setCloudStatus(`Hämtade ${count} frågor från molnet!`);
+        setCloudStatus(`Hämtade ${count} frågor från molnet! (Bilder arkiveras i molnet)`);
       }
       trainDb.getDatabaseStats().then(setDbStats);
       refreshCloudStats();
@@ -255,6 +260,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
   const getTotalLocalQuestions = () => {
     if (!dbStats) return 0;
     return dbStats.mathCount + dbStats.languageCount + dbStats.logicCount + dbStats.physicsCount;
+  };
+
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   return (
@@ -439,7 +452,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
           <div className="bg-orange-50 p-4 rounded-xl border-2 border-orange-100">
              <h3 className="font-bold text-orange-900 text-lg mb-2 border-b border-orange-200 pb-2">2. DATABAS (FIREBASE)</h3>
              <p className="text-xs text-orange-800 mb-4">
-               Spara frågor säkert i Googles moln. <strong>Obs:</strong> Bilder sparas bara lokalt för att spara utrymme.
+               Spara frågor och bilder säkert i Googles moln. Bilder arkiveras automatiskt i molnet för att spara plats på din enhet.
              </p>
              
              {isEnvConnected ? (
@@ -468,15 +481,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                 <div className="grid grid-cols-2 gap-2 mb-4 text-xs">
                     <div className="bg-white p-2 rounded border border-orange-200 text-center">
                         <div className="text-orange-600 font-bold">LOKALT PÅ DATORN</div>
-                        <div className="text-2xl font-black text-slate-700">{getTotalLocalQuestions()}</div>
-                        <div className="text-slate-400">frågor</div>
+                        <div className="flex justify-center gap-3 mt-1">
+                           <div className="text-center">
+                               <div className="text-xl font-black text-slate-700">{getTotalLocalQuestions()}</div>
+                               <div className="text-[9px] text-slate-400">FRÅGOR</div>
+                           </div>
+                           <div className="text-center border-l pl-3 border-slate-100">
+                               <div className="text-xl font-black text-slate-700">{dbStats?.imageCount || 0}</div>
+                               <div className="text-[9px] text-slate-400">BILDER</div>
+                           </div>
+                        </div>
                     </div>
                     <div className="bg-white p-2 rounded border border-orange-200 text-center">
                         <div className="text-orange-600 font-bold">I MOLNET (FIREBASE)</div>
-                        <div className="text-2xl font-black text-slate-700">
-                            {checkingCloud ? "..." : (cloudCount !== null ? cloudCount : "?")}
-                        </div>
-                        <div className="text-slate-400">frågor</div>
+                        {checkingCloud ? (
+                            <div className="mt-2 animate-pulse">...</div> 
+                        ) : (
+                           <div className="flex justify-center gap-3 mt-1">
+                               <div className="text-center">
+                                   <div className="text-xl font-black text-slate-700">{cloudStats?.questions !== -1 ? cloudStats?.questions : "?"}</div>
+                                   <div className="text-[9px] text-slate-400">FRÅGOR</div>
+                               </div>
+                               <div className="text-center border-l pl-3 border-slate-100">
+                                   <div className="text-xl font-black text-slate-700">{cloudStats?.images !== -1 ? cloudStats?.images : "?"}</div>
+                                   <div className="text-[9px] text-slate-400">BILDER</div>
+                               </div>
+                           </div>
+                        )}
                     </div>
                 </div>
              )}
@@ -485,13 +516,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                 <button
                   onClick={() => handleCloudSync('up')}
                   className={`flex-1 font-bold py-3 rounded-lg text-sm shadow-sm active:scale-95 transition-all ${
-                     (cloudCount !== null && getTotalLocalQuestions() > cloudCount) 
+                     (cloudStats?.questions !== undefined && cloudStats.questions !== -1 && getTotalLocalQuestions() > cloudStats.questions) 
                      ? "bg-orange-600 hover:bg-orange-700 text-white animate-pulse" 
                      : "bg-orange-500 hover:bg-orange-600 text-white"
                   }`}
                 >
                   ⬇ SPARA TILL MOLN
-                  {(cloudCount !== null && getTotalLocalQuestions() > cloudCount) && (
+                  {(cloudStats?.questions !== undefined && cloudStats.questions !== -1 && getTotalLocalQuestions() > cloudStats.questions) && (
                       <div className="text-[10px] opacity-90 font-normal">Du har osparad data!</div>
                   )}
                 </button>
@@ -573,28 +604,51 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
             <h3 className="font-bold text-slate-800 text-lg mb-4 border-b border-indigo-200 pb-2">DIN SPARADE KUNSKAP (LOKALT)</h3>
             
             {dbStats ? (
-              <div className="grid grid-cols-2 gap-2 mb-6">
-                 <div className="bg-white p-2 rounded-lg shadow-sm flex justify-between items-center">
-                    <span className="text-xs font-bold text-slate-500">MATTE</span>
-                    <span className="font-bold text-indigo-600">{dbStats.mathCount}</span>
-                 </div>
-                 <div className="bg-white p-2 rounded-lg shadow-sm flex justify-between items-center">
-                    <span className="text-xs font-bold text-slate-500">SVENSKA</span>
-                    <span className="font-bold text-indigo-600">{dbStats.languageCount}</span>
-                 </div>
-                 <div className="bg-white p-2 rounded-lg shadow-sm flex justify-between items-center">
-                    <span className="text-xs font-bold text-slate-500">LOGIK</span>
-                    <span className="font-bold text-indigo-600">{dbStats.logicCount}</span>
-                 </div>
-                 <div className="bg-white p-2 rounded-lg shadow-sm flex justify-between items-center">
-                    <span className="text-xs font-bold text-slate-500">FYSIK</span>
-                    <span className="font-bold text-indigo-600">{dbStats.physicsCount}</span>
-                 </div>
-                 <div className="col-span-2 bg-indigo-100 p-2 rounded-lg shadow-sm flex justify-between items-center border border-indigo-200">
-                    <span className="text-xs font-bold text-indigo-800 uppercase">SPARADE BILDER (OFFLINE)</span>
-                    <span className="font-bold text-indigo-800">{dbStats.imageCount}</span>
-                 </div>
-              </div>
+              <>
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  <div className="bg-white p-2 rounded-lg shadow-sm flex justify-between items-center">
+                      <span className="text-xs font-bold text-slate-500">MATTE</span>
+                      <span className="font-bold text-indigo-600">{dbStats.mathCount}</span>
+                  </div>
+                  <div className="bg-white p-2 rounded-lg shadow-sm flex justify-between items-center">
+                      <span className="text-xs font-bold text-slate-500">SVENSKA</span>
+                      <span className="font-bold text-indigo-600">{dbStats.languageCount}</span>
+                  </div>
+                  <div className="bg-white p-2 rounded-lg shadow-sm flex justify-between items-center">
+                      <span className="text-xs font-bold text-slate-500">LOGIK</span>
+                      <span className="font-bold text-indigo-600">{dbStats.logicCount}</span>
+                  </div>
+                  <div className="bg-white p-2 rounded-lg shadow-sm flex justify-between items-center">
+                      <span className="text-xs font-bold text-slate-500">FYSIK</span>
+                      <span className="font-bold text-indigo-600">{dbStats.physicsCount}</span>
+                  </div>
+                </div>
+                
+                {/* Image & Storage Stats */}
+                <div className="bg-white p-3 rounded-lg shadow-sm border border-indigo-200 mb-6">
+                   <div className="flex justify-between items-center mb-2">
+                      <span className="text-xs font-bold text-slate-500 uppercase">Bilder & Minne (LOKALT)</span>
+                      <span className="text-xs font-bold bg-indigo-100 text-indigo-800 px-2 py-1 rounded">
+                        {dbStats.imageCount} / 50 Cachat (Resten i molnet)
+                      </span>
+                   </div>
+                   
+                   {storageEst && (
+                     <div className="space-y-1">
+                        <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase">
+                           <span>Använt utrymme: {formatBytes(storageEst.usage)}</span>
+                           <span>Max: {formatBytes(storageEst.quota)}</span>
+                        </div>
+                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                           <div 
+                              className={`h-full transition-all duration-500 ${storageEst.percent > 80 ? 'bg-red-500' : 'bg-indigo-500'}`}
+                              style={{ width: `${Math.max(1, storageEst.percent)}%` }}
+                           ></div>
+                        </div>
+                     </div>
+                   )}
+                </div>
+              </>
             ) : (
               <div className="text-center text-sm text-slate-400 mb-4">Läser in statistik...</div>
             )}
