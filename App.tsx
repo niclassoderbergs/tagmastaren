@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Subject, Question, TrainCar, GameState, AppSettings, QuestionType } from './types';
 import { generateQuestion, generateRewardImage, playTextAsSpeech, markQuestionTooHard, removeBadImage } from './services/geminiService';
@@ -117,6 +116,7 @@ export default function App() {
   
   // Question States
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
+  const [selectedAnswerIndex, setSelectedAnswerIndex] = useState<number | null>(null);
   
   // QUEUE SYSTEM
   const [questionBuffer, setQuestionBuffer] = useState<Question[]>([]);
@@ -308,6 +308,7 @@ export default function App() {
     setShowExplanation(false);
     setPreloadedRewardImage(null);
     setCurrentQuestion(null);
+    setSelectedAnswerIndex(null);
 
     if (questionBuffer.length > 0) {
       // Take from Buffer
@@ -343,6 +344,7 @@ export default function App() {
     setHasDragDropOccurred(false); // Reset throttle for new mission
     setQuestionBuffer([]); // Clear old buffer
     setPreloadedRewardImage(null);
+    setSelectedAnswerIndex(null);
     
     setLoading(true);
     
@@ -366,6 +368,8 @@ export default function App() {
 
   const handleAnswer = (index: number) => {
     if (!currentQuestion || showExplanation || !currentQuestion.options) return;
+    
+    setSelectedAnswerIndex(index);
     const isCorrect = index === currentQuestion.correctAnswerIndex;
     processResult(isCorrect);
   };
@@ -482,6 +486,7 @@ export default function App() {
     setFeedback({ type: null, msg: "" });
     setMissionProgress(0);
     setPreloadedRewardImage(null);
+    setSelectedAnswerIndex(null);
   };
 
   const handleResetTrain = () => {
@@ -748,11 +753,14 @@ export default function App() {
                      
                      if (showExplanation) {
                        if (idx === currentQuestion.correctAnswerIndex) {
+                          // Correct Answer: Green
                           btnClass = "bg-green-100 border-green-500 text-green-900 font-bold shadow-lg scale-105";
-                       } else if (feedback.type === 'error' && option === currentQuestion.options?.[idx]) {
-                          btnClass = "opacity-50 bg-slate-100"; 
+                       } else if (idx === selectedAnswerIndex) {
+                          // Selected Wrong Answer: Red
+                          btnClass = "bg-red-100 border-red-400 text-red-800 font-bold shadow-lg opacity-80"; 
                        } else {
-                          btnClass = "opacity-50 bg-slate-50";
+                          // Other Answers: Faded
+                          btnClass = "opacity-40 bg-slate-50 border-slate-100 text-slate-300";
                        }
                      }
 
