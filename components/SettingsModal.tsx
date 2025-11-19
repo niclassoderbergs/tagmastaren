@@ -446,7 +446,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
              {isGenerating ? (
                <div className="space-y-2">
                  <div className="flex justify-between text-xs font-bold text-amber-900">
-                   <span>GENERERAR FRÅGOR... (4 sek paus mellan varje)</span>
+                   <span>GENERERAR FRÅGOR... (5 sek paus mellan varje)</span>
                    <span>{genProgress} / {genTarget}</span>
                  </div>
                  <div className="h-4 bg-amber-200 rounded-full overflow-hidden">

@@ -462,9 +462,9 @@ export const batchGenerateQuestions = async (
   
   for (let i = 0; i < count; i++) {
     try {
-      // Add a larger delay (4s) to be safe with Free Tier (approx 15 requests/min)
-      // 4000ms + execution time ensures we stay under limit
-      if (i > 0) await delay(4000);
+      // Add a larger delay (5s) to be safe with Free Tier (approx 15 requests/min)
+      // 5000ms + execution time ensures we stay under limit
+      if (i > 0) await delay(5000);
 
       // Rotate through subjects
       const subject = subjects[i % subjects.length];
