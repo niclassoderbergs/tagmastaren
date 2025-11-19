@@ -243,7 +243,7 @@ const questionSchema: Schema = {
 
 const SUB_TOPICS: Record<Subject, string[]> = {
   [Subject.MATH]: [
-    "RÄKNA ANTAL (Hur många...)",
+    "RÄKNA FRUKTER ELLER DJUR (Inte tåg)",
     "ENKEL ADDITION (Plus)",
     "ENKEL SUBTRAKTION (Minus)",
     "KLOCKAN OCH TID (Hel och halvtimme)",
@@ -285,12 +285,20 @@ const SUB_TOPICS: Record<Subject, string[]> = {
 };
 
 const generateDragDropQuestion = (difficulty: number): Question => {
+  // Expanded to include "Bistro/Table setting" themes for variety
   const items = [
-    { emoji: '🐮', name: 'KOSSOR', container: 'BOSKAPSVAGNEN' },
-    { emoji: '📦', name: 'LÅDOR', container: 'GODSVAGNEN' },
-    { emoji: '🪵', name: 'TIMMERSTOCKAR', container: 'TIMMERVAGNEN' },
-    { emoji: '🧳', name: 'RESVÄSKOR', container: 'PASSAGERARVAGNEN' },
-    { emoji: '⚙️', name: 'KUGGHJUL', container: 'VERKSTADSVAGNEN' }
+    // Train Cargo Theme
+    { emoji: '🐮', name: 'KOSSOR', container: 'BOSKAPSVAGNEN', source: 'LASTKAJEN', verb: 'LASTA PÅ' },
+    { emoji: '📦', name: 'LÅDOR', container: 'GODSVAGNEN', source: 'LASTKAJEN', verb: 'LASTA PÅ' },
+    { emoji: '🪵', name: 'TIMMER', container: 'TIMMERVAGNEN', source: 'LASTKAJEN', verb: 'LASTA PÅ' },
+    { emoji: '🧳', name: 'VÄSKOR', container: 'PASSAGERARVAGNEN', source: 'PERRONGEN', verb: 'LASTA PÅ' },
+    { emoji: '⚙️', name: 'KUGGHJUL', container: 'VERKSTADSVAGNEN', source: 'VERKSTADEN', verb: 'LÄMNA' },
+    
+    // Bistro / Dining Theme (New variety)
+    { emoji: '🍽️', name: 'TALLRIKAR', container: 'BISTRO-BORDET', source: 'KÖKSLUCKAN', verb: 'DUKA FRAM' },
+    { emoji: '🥤', name: 'MUGGAR', container: 'BORDET', source: 'DISKEN', verb: 'STÄLL FRAM' },
+    { emoji: '🥄', name: 'SKEDAR', container: 'BORDET', source: 'LÅDAN', verb: 'DUKA FRAM' },
+    { emoji: '🍎', name: 'ÄPPLEN', container: 'FRUKTSKÅLEN', source: 'KORGEN', verb: 'LÄGG I' }
   ];
 
   const selectedItem = items[Math.floor(Math.random() * items.length)];
@@ -303,14 +311,17 @@ const generateDragDropQuestion = (difficulty: number): Question => {
   return {
     id: crypto.randomUUID(),
     type: 'DRAG_AND_DROP',
-    text: `LASTKAJEN: LASTA PÅ EXAKT ${targetCount} ST ${selectedItem.name} PÅ ${selectedItem.container}.`,
-    explanation: `BRA JOBBAT! NU HAR TÅGET ${targetCount} ${selectedItem.name} MED SIG.`,
+    // Simplified instruction as requested: "Lasta på 2 st timmerstockar" instead of "Lastkajen: Lasta..."
+    text: `${selectedItem.verb} ${targetCount} ST ${selectedItem.name}.`,
+    explanation: `BRA JOBBAT! NU ÄR DET KLART.`,
     difficultyLevel: difficulty,
     dragDropConfig: {
       itemEmoji: selectedItem.emoji,
       targetCount: targetCount,
       totalItems: totalItems,
-      containerName: selectedItem.container
+      containerName: selectedItem.container,
+      sourceName: selectedItem.source,
+      verb: selectedItem.verb
     }
   };
 };
@@ -502,7 +513,7 @@ const fetchFromAIAndSave = async (
   let promptContext = "";
   switch (subject) {
     case Subject.MATH:
-      promptContext = `Matematik. FOKUSERA PÅ: ${specificFocus}. Använd tågtema om det passar. Användaren har ${currentCarCount} vagnar.`;
+      promptContext = `Matematik. FOKUSERA PÅ: ${specificFocus}. VIKTIGT: VARIERA TEMAT. Det behöver INTE vara tåg. Använd gärna djur, mat, superhjältar, rymden.`;
       break;
     case Subject.LANGUAGE:
       promptContext = `Svenska språket. FOKUSERA PÅ: ${specificFocus}.`;
@@ -523,6 +534,7 @@ const fetchFromAIAndSave = async (
     3. FOKUS: ${specificFocus}.
     4. SPRÅK: Svenska, VERSALER.
     5. ${numberFormattingRule}
+    6. FRÅGA INTE OM DETTA SPEL ELLER HUR MÅNGA VAGNAR TÅGET HAR. FRÅGA OM MATEMATIK, LOGIK ELLER SPRÅK I ALLMÄNHET.
     
     JSON format required.
     VisualSubject: English description for an image if concrete object, else null.
@@ -535,7 +547,7 @@ const fetchFromAIAndSave = async (
     config: {
       responseMimeType: "application/json",
       responseSchema: questionSchema,
-      temperature: 0.8,
+      temperature: 0.9, // Increased temperature for more variety
     },
   });
 

@@ -12,7 +12,9 @@ export interface DragDropConfig {
   itemEmoji: string;
   targetCount: number;
   totalItems: number;
-  containerName: string; // e.g., "Boskapsvagnen"
+  containerName: string; // e.g., "Boskapsvagnen" or "Bordet"
+  sourceName?: string; // e.g., "Lastkajen" or "Köksluckan"
+  verb?: string; // e.g., "Lasta på" or "Duka fram"
 }
 
 export interface Question {
