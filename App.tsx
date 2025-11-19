@@ -135,6 +135,11 @@ export default function App() {
   // Audio State
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
+  // SCROLL REFS
+  const rewardSectionRef = useRef<HTMLDivElement>(null);
+  const questionCardRef = useRef<HTMLDivElement>(null);
+  const questionTopRef = useRef<HTMLDivElement>(null);
+
   // Persist Settings
   useEffect(() => {
     localStorage.setItem('trainMasterSettings', JSON.stringify(settings));
@@ -144,6 +149,34 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('trainMasterState', JSON.stringify(gameState));
   }, [gameState]);
+
+  // --- AUTO SCROLL EFFECTS ---
+
+  // 1. Scroll to Question when loaded (skipping Conductor)
+  useEffect(() => {
+    if (currentQuestion && !showExplanation && !loading) {
+      // Small delay to ensure DOM is ready
+      setTimeout(() => {
+        if (questionTopRef.current) {
+          // Scroll so the question card top is near the top of the viewport
+          const yOffset = -20; // Keep a tiny bit of margin
+          const element = questionTopRef.current;
+          const y = element.getBoundingClientRect().top + window.scrollY + yOffset;
+          window.scrollTo({ top: y, behavior: 'smooth' });
+        }
+      }, 100);
+    }
+  }, [currentQuestion, showExplanation, loading]);
+
+  // 2. Scroll to Reward Image when it appears
+  useEffect(() => {
+    if (feedback.type === 'success' && (isGeneratingImage || preloadedRewardImage)) {
+      setTimeout(() => {
+        rewardSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 150); // Slightly longer delay to allow image container to expand
+    }
+  }, [feedback.type, isGeneratingImage, preloadedRewardImage]);
+
 
   // --- BUFFER MANAGEMENT ---
 
@@ -466,7 +499,8 @@ export default function App() {
         <div className="mt-4 mb-8">
           <TrainViz cars={gameState.cars} />
         </div>
-        <div className="flex-1 container mx-auto px-4 pb-10 flex flex-col items-center justify-center">
+        {/* Changed justify-center to justify-start and added pt-8 to fix mobile jumpiness */}
+        <div className="flex-1 container mx-auto px-4 pb-10 pt-8 flex flex-col items-center justify-start">
           <Conductor 
             mood="happy" 
             message={gameState.cars.length === 1 
@@ -524,7 +558,7 @@ export default function App() {
     >
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
       
-      <div className="bg-white p-4 shadow-sm flex justify-between items-center">
+      <div className="bg-white p-4 shadow-sm flex justify-between items-center sticky top-0 z-30">
         <button 
           onClick={() => returnToMenu()}
           className="text-slate-500 hover:text-slate-800 font-bold flex items-center gap-2 uppercase"
@@ -557,7 +591,10 @@ export default function App() {
 
             {/* Reward Image Section */}
             {feedback.type === 'success' && (isGeneratingImage || preloadedRewardImage) && (
-              <div className="flex flex-col items-center justify-center animate-bounce-in mb-2">
+              <div 
+                ref={rewardSectionRef} 
+                className="flex flex-col items-center justify-center animate-bounce-in mb-2 scroll-mt-4"
+              >
                  {isGeneratingImage ? (
                    <div className="bg-white p-4 rounded-2xl shadow-lg border-2 border-purple-200 flex flex-col items-center">
                       <div className="text-3xl animate-spin mb-2">🎨</div>
@@ -606,6 +643,9 @@ export default function App() {
               />
             )}
 
+            {/* Invisible marker for scrolling past conductor */}
+            <div ref={questionTopRef}></div>
+
             {/* NEW LOCATION FOR CONTINUE BUTTON */}
             {showExplanation && (
                <div className="flex justify-center my-2 animate-fade-in z-20 relative">
@@ -624,7 +664,7 @@ export default function App() {
                </div>
             )}
 
-            <div className="bg-white rounded-3xl shadow-xl p-8 border-4 border-blue-100 relative overflow-hidden">
+            <div ref={questionCardRef} className="bg-white rounded-3xl shadow-xl p-8 border-4 border-blue-100 relative overflow-hidden">
                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full -mr-16 -mt-16 opacity-50"></div>
                
                <div className="flex flex-wrap justify-between mb-2 relative z-10 gap-2">
