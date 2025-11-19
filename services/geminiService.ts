@@ -442,16 +442,23 @@ export const markQuestionTooHard = async (question: Question): Promise<void> => 
   await trainDb.updateQuestionDifficulty(question.id, newDifficulty);
 };
 
+// Helper delay to avoid rate limits
+const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
 export const batchGenerateQuestions = async (
   count: number, 
   useDigits: boolean, 
   difficulties: Record<Subject, number>,
-  onProgress: (completed: number) => void
+  onProgress: (completed: number) => void,
+  onError?: (errorMsg: string) => void
 ): Promise<void> => {
   const subjects = [Subject.MATH, Subject.LANGUAGE, Subject.LOGIC, Subject.PHYSICS];
   
   for (let i = 0; i < count; i++) {
     try {
+      // Add a small delay to be kind to the API rate limits (Free Tier)
+      if (i > 0) await delay(1000);
+
       // Rotate through subjects
       const subject = subjects[i % subjects.length];
       const difficulty = difficulties[subject];
@@ -462,9 +469,22 @@ export const batchGenerateQuestions = async (
       await fetchFromAIAndSave(subject, difficulty, useDigits, 5, specificFocus);
       
       onProgress(i + 1);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Batch generation error at index " + i, error);
-      // Continue despite error to try and finish batch
+      
+      const msg = error.message || String(error);
+      // Identify quota issues
+      if (msg.includes('429') || msg.includes('quota')) {
+         if (onError) onError("Kvot överskriden (För många frågor för fort). Vänta lite.");
+         break; // Stop batch
+      }
+      if (msg.includes('API key') || msg.includes('403')) {
+         if (onError) onError("Fel på AI-nyckeln. Kontrollera inställningarna.");
+         break; 
+      }
+      
+      // If just a random glitch, report but maybe continue?
+      if (onError) onError(`Fel vid fråga ${i+1}: ${msg.substring(0, 50)}...`);
     }
   }
 };

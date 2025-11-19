@@ -40,6 +40,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
   const [isGenerating, setIsGenerating] = useState(false);
   const [genProgress, setGenProgress] = useState(0);
   const [genTarget, setGenTarget] = useState(0);
+  const [genError, setGenError] = useState<string>("");
 
   const hasKey = Boolean(process.env.API_KEY);
   const isEnvConnected = trainDb.isCloudConnected();
@@ -82,13 +83,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
   };
 
   const handleBatchGenerate = async (count: number) => {
+    if (!hasKey) {
+        setGenError("Ingen AI-nyckel hittades! Konfigurera Gemini API-nyckel först.");
+        return;
+    }
+    
     setIsGenerating(true);
     setGenTarget(count);
     setGenProgress(0);
+    setGenError("");
     
-    await batchGenerateQuestions(count, settings.useDigits, settings.subjectDifficulty, (done) => {
-      setGenProgress(done);
-    });
+    await batchGenerateQuestions(
+        count, 
+        settings.useDigits, 
+        settings.subjectDifficulty, 
+        (done) => {
+            setGenProgress(done);
+        },
+        (errorMsg) => {
+            setGenError(errorMsg);
+            // We don't necessarily stop the UI spinner here, as partial success is possible, 
+            // but the service might break the loop.
+        }
+    );
     
     setIsGenerating(false);
     trainDb.getDatabaseStats().then(setDbStats);
@@ -419,15 +436,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
           </div>
 
           <div className="bg-amber-50 p-4 rounded-xl border-2 border-amber-100">
-             <h3 className="font-bold text-amber-900 text-lg mb-2 border-b border-amber-200 pb-2">⚡ TURBO-LADDA DATABASEN</h3>
+             <h3 className="font-bold text-amber-900 text-lg mb-2 border-b border-amber-200 pb-2">⚡ TURBO-LADDA (SKAPA MED AI)</h3>
              <p className="text-xs text-amber-800 mb-4">
-               Skapa frågor nu så din son slipper vänta! Frågorna sparas i din webbläsare och kan sen skickas till molnet.
+               Skapa frågor nu så din son slipper vänta! Använder <strong>AI-motorn</strong> för att generera.
              </p>
              
              {isGenerating ? (
                <div className="space-y-2">
                  <div className="flex justify-between text-xs font-bold text-amber-900">
-                   <span>GENERERAR FRÅGOR...</span>
+                   <span>GENERERAR FRÅGOR... (1 sek paus mellan varje)</span>
                    <span>{genProgress} / {genTarget}</span>
                  </div>
                  <div className="h-4 bg-amber-200 rounded-full overflow-hidden">
@@ -436,21 +453,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                       style={{ width: `${(genProgress / genTarget) * 100}%` }}
                     ></div>
                  </div>
+                 {genError && (
+                    <div className="bg-red-100 text-red-800 text-xs p-2 rounded border border-red-200 font-bold animate-pulse">
+                        STOPP: {genError}
+                    </div>
+                 )}
                </div>
              ) : (
-               <div className="flex gap-2">
-                 <button 
-                   onClick={() => handleBatchGenerate(10)}
-                   className="flex-1 bg-white hover:bg-amber-100 text-amber-800 font-bold py-2 rounded-lg border border-amber-300 shadow-sm active:scale-95"
-                 >
-                   +10 FRÅGOR
-                 </button>
-                 <button 
-                   onClick={() => handleBatchGenerate(20)}
-                   className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 rounded-lg shadow-sm active:scale-95"
-                 >
-                   +20 FRÅGOR
-                 </button>
+               <div className="flex gap-2 flex-col">
+                 <div className="flex gap-2">
+                    <button 
+                      onClick={() => handleBatchGenerate(10)}
+                      className="flex-1 bg-white hover:bg-amber-100 text-amber-800 font-bold py-2 rounded-lg border border-amber-300 shadow-sm active:scale-95"
+                    >
+                      +10 FRÅGOR
+                    </button>
+                    <button 
+                      onClick={() => handleBatchGenerate(20)}
+                      className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 rounded-lg shadow-sm active:scale-95"
+                    >
+                      +20 FRÅGOR
+                    </button>
+                 </div>
+                 {genError && (
+                    <div className="bg-red-100 text-red-800 text-xs p-2 rounded border border-red-200 font-bold text-center">
+                        Senaste felet: {genError}
+                    </div>
+                 )}
                </div>
              )}
           </div>
