@@ -28,6 +28,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
   const [backupStatus, setBackupStatus] = useState<string>("");
   const [dbStats, setDbStats] = useState<DbStats | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [connectionErrorMsg, setConnectionErrorMsg] = useState<string>("");
   const [cloudStatus, setCloudStatus] = useState<string>("");
   const [tempFirebaseConfig, setTempFirebaseConfig] = useState<string>("");
   
@@ -122,9 +123,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
 
   const handleTestConnection = async () => {
     setConnectionStatus('testing');
-    const success = await testApiKey();
-    setConnectionStatus(success ? 'success' : 'error');
-    setTimeout(() => setConnectionStatus('idle'), 5000);
+    setConnectionErrorMsg("");
+    
+    const result = await testApiKey();
+    
+    if (result.success) {
+       setConnectionStatus('success');
+    } else {
+       setConnectionStatus('error');
+       setConnectionErrorMsg(result.message || "Okänt fel");
+    }
+    
+    setTimeout(() => {
+      if (connectionStatus !== 'error') setConnectionStatus('idle');
+    }, 5000);
   };
 
   const handleSaveFirebaseConfig = () => {
@@ -202,6 +214,47 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
         </h2>
 
         <div className="space-y-8">
+          
+          {/* --- AI KEY SECTION --- */}
+          <div className="flex flex-col gap-3 pt-4 border-b-2 border-blue-100 pb-6">
+             <h3 className="font-bold text-slate-800 text-lg">1. AI-MOTORN (Google Gemini)</h3>
+             <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-center space-y-3">
+                <div className="text-xs text-slate-500 flex justify-center gap-2">
+                   NYCKEL-STATUS: 
+                   <span className={hasKey ? "text-green-600 font-bold" : "text-red-600 font-bold"}>
+                     {hasKey ? "HITTAD (Env)" : "SAKNAS"}
+                   </span>
+                </div>
+                <button 
+                  onClick={handleTestConnection}
+                  disabled={connectionStatus === 'testing'}
+                  className={`w-full py-2 px-4 rounded-lg text-sm font-bold transition-colors flex justify-center items-center gap-2 ${
+                    connectionStatus === 'success' ? 'bg-green-100 text-green-700 border border-green-300' :
+                    connectionStatus === 'error' ? 'bg-red-100 text-red-700 border border-red-300' :
+                    'bg-white text-blue-600 border border-blue-200 hover:bg-blue-100'
+                  }`}
+                >
+                  {connectionStatus === 'idle' && "📡 TESTA AI-KOPPLING"}
+                  {connectionStatus === 'testing' && "KONTROLLERAR..."}
+                  {connectionStatus === 'success' && "✅ ALLT FUNGERAR!"}
+                  {connectionStatus === 'error' && "❌ FEL PÅ NYCKELN"}
+                </button>
+
+                {connectionStatus === 'error' && connectionErrorMsg && (
+                  <div className="bg-red-50 p-2 rounded text-xs font-mono text-red-800 break-all border border-red-100">
+                    Felmeddelande: {connectionErrorMsg}
+                  </div>
+                )}
+
+                {hasKey && (
+                  <p className="text-[10px] text-slate-400 leading-tight mt-2">
+                    🔒 Tips: Begränsa din API-nyckel i Google Cloud Console till din webbplatsadress för extra säkerhet.
+                  </p>
+                )}
+             </div>
+          </div>
+
+          {/* --- GENERAL SETTINGS --- */}
           <div className="flex items-center justify-between p-4 bg-blue-50 rounded-xl border-2 border-blue-100">
             <div>
               <h3 className="font-bold text-slate-800 text-lg">STORA BOKSTÄVER</h3>
@@ -312,7 +365,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
 
           {/* CLOUD SYNC SECTION - FIREBASE */}
           <div className="bg-orange-50 p-4 rounded-xl border-2 border-orange-100">
-             <h3 className="font-bold text-orange-900 text-lg mb-2 border-b border-orange-200 pb-2">🔥 MOLN-KOPPLING (FIREBASE)</h3>
+             <h3 className="font-bold text-orange-900 text-lg mb-2 border-b border-orange-200 pb-2">2. DATABAS (FIREBASE)</h3>
              <p className="text-xs text-orange-800 mb-4">
                Spara frågor säkert i Googles moln. <strong>Obs:</strong> Bilder sparas bara lokalt för att spara utrymme.
              </p>
@@ -425,38 +478,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                 {backupStatus}
               </div>
             )}
-          </div>
-          
-          <div className="flex flex-col gap-3 pt-4 border-t-2 border-blue-100">
-             <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-center space-y-3">
-                <div className="text-xs text-slate-500 flex justify-center gap-2">
-                   API-NYCKEL: 
-                   <span className={hasKey ? "text-green-600 font-bold" : "text-red-600 font-bold"}>
-                     {hasKey ? "AKTIV" : "SAKNAS"}
-                   </span>
-                </div>
-                <button 
-                  onClick={handleTestConnection}
-                  disabled={connectionStatus === 'testing'}
-                  className={`w-full py-2 px-4 rounded-lg text-sm font-bold transition-colors flex justify-center items-center gap-2 ${
-                    connectionStatus === 'success' ? 'bg-green-100 text-green-700 border border-green-300' :
-                    connectionStatus === 'error' ? 'bg-red-100 text-red-700 border border-red-300' :
-                    'bg-white text-blue-600 border border-blue-200 hover:bg-blue-100'
-                  }`}
-                >
-                  {connectionStatus === 'idle' && "📡 TESTA ANSLUTNING"}
-                  {connectionStatus === 'testing' && "KONTROLLERAR..."}
-                  {connectionStatus === 'success' && "✅ ALLT FUNGERAR!"}
-                  {connectionStatus === 'error' && "❌ FEL PÅ NYCKELN"}
-                </button>
-
-                {/* NEW SECURITY TIP */}
-                {hasKey && (
-                  <p className="text-[10px] text-slate-400 leading-tight mt-2">
-                    🔒 För maximal säkerhet: Gå till Google Cloud Console och begränsa nyckeln till din webbplats-adress (Website Restrictions).
-                  </p>
-                )}
-             </div>
           </div>
         </div>
 

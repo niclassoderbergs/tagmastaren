@@ -197,17 +197,21 @@ const generateDragDropQuestion = (difficulty: number): Question => {
   };
 };
 
-export const testApiKey = async (): Promise<boolean> => {
+export const testApiKey = async (): Promise<{ success: boolean; message?: string }> => {
   try {
     // Minimal request to check auth and project validity
+    if (!process.env.API_KEY) {
+      return { success: false, message: "API Key is missing (process.env.API_KEY is empty)" };
+    }
+
     await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: { parts: [{ text: 'Test' }] },
     });
-    return true;
-  } catch (error) {
+    return { success: true };
+  } catch (error: any) {
     console.warn("API Key Test Failed:", error);
-    return false;
+    return { success: false, message: error.message || "Unknown API error" };
   }
 };
 
