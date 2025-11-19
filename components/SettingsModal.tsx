@@ -53,7 +53,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
 
   // Key Source Info
   const keyDebug = getApiKeyDebug();
-  const keySource = getKeySource(); // 'MANUAL' | 'ENV' | 'NONE'
+  const keySource = getKeySource(); // 'MANUAL' | 'ENV_VITE' | 'ENV_LEGACY' | 'NONE'
   const isBlocked = isEnvKeyBlocked();
   const hasKey = keySource !== 'NONE';
 
@@ -292,7 +292,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                   <div className="text-right">
                      <div className="text-[10px] text-slate-400 uppercase font-bold">KÄLLA</div>
                      {keySource === 'MANUAL' && <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded font-bold">MANUELL</span>}
-                     {keySource === 'ENV' && <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded font-bold">SERVER (Gammal?)</span>}
+                     {keySource === 'ENV_VITE' && <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded font-bold">ENV (VITE_) ✅</span>}
+                     {keySource === 'ENV_LEGACY' && <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded font-bold">ENV (GAMMAL) ⚠️</span>}
                      {keySource === 'NONE' && <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded font-bold">INGEN</span>}
                   </div>
                 </div>
@@ -300,13 +301,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                 {/* Block Environment Key Toggle */}
                 {keySource !== 'MANUAL' && (
                   <div className="flex items-center justify-between text-xs px-2">
-                    <span className="text-slate-500">Använd server-nyckel (process.env)?</span>
+                    <span className="text-slate-500">Använd server-nyckel?</span>
                     <button 
                       onClick={handleToggleBlockEnv}
                       className={`px-3 py-1 rounded-full font-bold transition-colors ${!isBlocked ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-500'}`}
                     >
-                      {isBlocked ? "AVSTÄNGD (BLOCKERAD)" : "PÅ (TILLÅTEN)"}
+                      {isBlocked ? "AVSTÄNGD" : "TILLÅTEN"}
                     </button>
+                  </div>
+                )}
+
+                {!hasKey && !isBlocked && (
+                  <div className="text-xs text-red-600 bg-red-50 p-2 rounded border border-red-100 text-left">
+                    <span className="font-bold">TIPS:</span> Döp om din variabel i Vercel till <code>VITE_GOOGLE_AI_API_KEY</code> för att den ska hittas automatiskt.
                   </div>
                 )}
                 
