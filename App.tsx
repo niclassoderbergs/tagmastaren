@@ -478,7 +478,7 @@ export default function App() {
         </button>
         <div className="flex items-center gap-4">
           <div className="font-bold text-slate-400 text-xs sm:text-sm uppercase">
-             {Subject[selectedSubject]} NIVÅ {settings.subjectDifficulty[selectedSubject]}
+             {selectedSubject ? Subject[selectedSubject] : ''} NIVÅ {selectedSubject ? settings.subjectDifficulty[selectedSubject] : ''}
           </div>
           <button 
             onClick={() => setShowSettings(true)}
@@ -515,7 +515,7 @@ export default function App() {
                         <div className="text-center mt-2">
                           <p className="font-bold text-slate-800 text-xl uppercase">
                             {currentQuestion.options && currentQuestion.correctAnswerIndex !== undefined 
-                              ? currentQuestion.options[currentQuestion.correctAnswerIndex] 
+                              ? currentQuestion.options?.[currentQuestion.correctAnswerIndex ?? 0] 
                               : ""}
                           </p>
                         </div>
@@ -605,7 +605,7 @@ export default function App() {
                      if (showExplanation) {
                        if (idx === currentQuestion.correctAnswerIndex) {
                           btnClass = "bg-green-100 border-green-500 text-green-900 font-bold shadow-lg scale-105";
-                       } else if (feedback.type === 'error' && option === currentQuestion.options[idx]) {
+                       } else if (feedback.type === 'error' && option === currentQuestion.options?.[idx]) {
                           btnClass = "opacity-50 bg-slate-100"; 
                        } else {
                           btnClass = "opacity-50 bg-slate-50";

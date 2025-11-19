@@ -28,7 +28,7 @@ const FALLBACK_QUESTIONS: Omit<Question, 'id'>[] = [
     correctAnswerIndex: 2,
     explanation: "5 PLUS 5 ÄR LIKA MED 10. DU HAR 10 FINGRAR!",
     difficultyLevel: 1,
-    visualSubject: null
+    visualSubject: undefined
   },
   {
     type: 'MULTIPLE_CHOICE',
@@ -82,7 +82,7 @@ const FALLBACK_QUESTIONS: Omit<Question, 'id'>[] = [
     correctAnswerIndex: 2,
     explanation: "9 ÄR DET HÖGSTA TALET I LISTAN.",
     difficultyLevel: 1,
-    visualSubject: null
+    visualSubject: undefined
   },
   {
     type: 'MULTIPLE_CHOICE',
