@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { AppSettings, Subject } from '../types';
+import { AppSettings, Subject, FirebaseConfig } from '../types';
 import { trainDb, DbStats } from '../services/db';
 import { testApiKey, batchGenerateQuestions } from '../services/geminiService';
 
@@ -30,6 +29,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
   const [dbStats, setDbStats] = useState<DbStats | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [cloudStatus, setCloudStatus] = useState<string>("");
+  const [tempFirebaseConfig, setTempFirebaseConfig] = useState<string>("");
   
   // Generator State
   const [isGenerating, setIsGenerating] = useState(false);
@@ -37,14 +37,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
   const [genTarget, setGenTarget] = useState(0);
 
   const hasKey = Boolean(process.env.API_KEY);
+  const isEnvConnected = trainDb.isCloudConnected();
 
-  // Initialize DB cloud connection if settings exist
+  // Initialize DB cloud connection if settings exist manually
   useEffect(() => {
-    if (settings.supabaseUrl && settings.supabaseKey) {
-      trainDb.initCloud(settings.supabaseUrl, settings.supabaseKey);
+    if (!isEnvConnected && settings.firebaseConfig) {
+      trainDb.initCloud(settings.firebaseConfig);
     }
     trainDb.getDatabaseStats().then(setDbStats);
-  }, [settings.supabaseUrl, settings.supabaseKey]);
+    
+    if (settings.firebaseConfig) {
+        setTempFirebaseConfig(JSON.stringify(settings.firebaseConfig, null, 2));
+    }
+  }, [settings.firebaseConfig, isEnvConnected]);
 
   const updateDifficulty = (subject: Subject, change: number) => {
     const current = settings.subjectDifficulty[subject];
@@ -122,9 +127,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
     setTimeout(() => setConnectionStatus('idle'), 5000);
   };
 
+  const handleSaveFirebaseConfig = () => {
+    try {
+        const config = JSON.parse(tempFirebaseConfig);
+        onUpdateSettings({
+            ...settings,
+            firebaseConfig: config
+        });
+        trainDb.initCloud(config);
+        setCloudStatus("Konfiguration sparad!");
+    } catch (e) {
+        setCloudStatus("Felaktig JSON!");
+    }
+  };
+
   const handleCloudSync = async (direction: 'up' | 'down') => {
-    if (!settings.supabaseUrl || !settings.supabaseKey) {
-      setCloudStatus("Fyll i moln-uppgifter först!");
+    if (!trainDb.isCloudConnected()) {
+      setCloudStatus("Ingen anslutning konfigurerad!");
       return;
     }
     
@@ -270,46 +289,50 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
              )}
           </div>
 
-          {/* CLOUD SYNC SECTION */}
-          <div className="bg-emerald-50 p-4 rounded-xl border-2 border-emerald-100">
-             <h3 className="font-bold text-emerald-900 text-lg mb-2 border-b border-emerald-200 pb-2">☁️ MOLN-KOPPLING (Supabase)</h3>
-             <p className="text-xs text-emerald-800 mb-4">
-               Koppla en databas för att spara frågor säkert och dela mellan enheter.
+          {/* CLOUD SYNC SECTION - FIREBASE */}
+          <div className="bg-orange-50 p-4 rounded-xl border-2 border-orange-100">
+             <h3 className="font-bold text-orange-900 text-lg mb-2 border-b border-orange-200 pb-2">🔥 MOLN-KOPPLING (FIREBASE)</h3>
+             <p className="text-xs text-orange-800 mb-4">
+               Spara frågor säkert i Googles moln.
              </p>
              
-             <div className="space-y-2 mb-4">
-               <input 
-                 type="text" 
-                 placeholder="Project URL (https://xyz.supabase.co)" 
-                 value={settings.supabaseUrl || ''}
-                 onChange={(e) => onUpdateSettings({...settings, supabaseUrl: e.target.value})}
-                 className="w-full p-2 rounded border border-emerald-200 text-sm"
-               />
-               <input 
-                 type="password" 
-                 placeholder="Anon / Public Key" 
-                 value={settings.supabaseKey || ''}
-                 onChange={(e) => onUpdateSettings({...settings, supabaseKey: e.target.value})}
-                 className="w-full p-2 rounded border border-emerald-200 text-sm"
-               />
-             </div>
+             {isEnvConnected ? (
+               <div className="bg-white/50 p-2 rounded mb-4 text-center border border-orange-200">
+                 <span className="text-sm text-orange-800 font-bold">✅ ANSLUTEN TILL FIREBASE</span>
+               </div>
+             ) : (
+               <div className="space-y-2 mb-4">
+                 <textarea 
+                   placeholder='Klistra in { "apiKey": "...", ... }' 
+                   value={tempFirebaseConfig}
+                   onChange={(e) => setTempFirebaseConfig(e.target.value)}
+                   className="w-full p-2 rounded border border-orange-200 text-xs font-mono h-24"
+                 />
+                 <button 
+                    onClick={handleSaveFirebaseConfig}
+                    className="w-full bg-orange-100 hover:bg-orange-200 text-orange-800 font-bold py-1 rounded border border-orange-300 text-xs"
+                 >
+                    SPARA KONFIGURATION
+                 </button>
+               </div>
+             )}
              
              <div className="flex gap-2">
                 <button
                   onClick={() => handleCloudSync('up')}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-lg text-sm shadow-sm active:scale-95"
+                  className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 rounded-lg text-sm shadow-sm active:scale-95"
                 >
-                  ⬆ SPARA TILL MOLN
+                  ⬇ SPARA TILL MOLN
                 </button>
                 <button
                   onClick={() => handleCloudSync('down')}
-                  className="flex-1 bg-white hover:bg-emerald-100 text-emerald-800 font-bold py-2 rounded-lg border border-emerald-300 text-sm shadow-sm active:scale-95"
+                  className="flex-1 bg-white hover:bg-orange-100 text-orange-800 font-bold py-2 rounded-lg border border-orange-300 text-sm shadow-sm active:scale-95"
                 >
-                  ⬇ HÄMTA FRÅN MOLN
+                  ⬆ HÄMTA FRÅN MOLN
                 </button>
              </div>
              {cloudStatus && (
-                <div className="mt-2 text-center text-xs font-bold text-emerald-800">
+                <div className="mt-2 text-center text-xs font-bold text-orange-800">
                   {cloudStatus}
                 </div>
              )}

@@ -1,3 +1,4 @@
+
 export enum Subject {
   MATH = 'MATH',
   LANGUAGE = 'LANGUAGE',
@@ -39,10 +40,18 @@ export interface GameState {
   currentStreak: number;
 }
 
+export interface FirebaseConfig {
+  apiKey: string;
+  authDomain: string;
+  projectId: string;
+  storageBucket: string;
+  messagingSenderId: string;
+  appId: string;
+}
+
 export interface AppSettings {
   useUppercase: boolean;
   useDigits: boolean; // New setting for number formatting
   subjectDifficulty: Record<Subject, number>;
-  supabaseUrl?: string; // For cloud sync
-  supabaseKey?: string; // For cloud sync
+  firebaseConfig?: FirebaseConfig; // For cloud sync
 }

@@ -1,10 +1,20 @@
-import { Question, Subject } from '../types';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { Question, Subject, FirebaseConfig } from '../types';
+import { initializeApp, FirebaseApp, getApps, getApp } from 'firebase/app';
+import { getFirestore, Firestore, doc, setDoc, getDocs, collection, writeBatch } from 'firebase/firestore';
 
 const DB_NAME = 'TrainMasterDB';
 const DB_VERSION = 1;
 const STORE_QUESTIONS = 'questions';
 const STORE_IMAGES = 'images';
+
+const DEFAULT_FIREBASE_CONFIG: FirebaseConfig = {
+  apiKey: "AIzaSyDKn6iqekVMt6ZtBvEeXNYZxp1lez-fYJk",
+  authDomain: "tagmastaren-753be.firebaseapp.com",
+  projectId: "tagmastaren-753be",
+  storageBucket: "tagmastaren-753be.firebasestorage.app",
+  messagingSenderId: "844741450598",
+  appId: "1:844741450598:web:b87fbce9d33290960c46a7"
+};
 
 interface ImageRecord {
   prompt: string;
@@ -29,18 +39,51 @@ export interface DbStats {
 
 class TrainDB {
   private db: IDBDatabase | null = null;
-  private supabase: SupabaseClient | null = null;
+  private firebaseApp: FirebaseApp | null = null;
+  private firestore: Firestore | null = null;
+
+  constructor() {
+    // 1. Try Environment Variables (Vercel)
+    const apiKey = process.env.VITE_FIREBASE_API_KEY;
+    const projectId = process.env.VITE_FIREBASE_PROJECT_ID;
+    
+    if (apiKey && projectId) {
+      const config: FirebaseConfig = {
+        apiKey: apiKey,
+        authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || "",
+        projectId: projectId,
+        storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || "",
+        messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
+        appId: process.env.VITE_FIREBASE_APP_ID || ""
+      };
+      this.initCloud(config);
+    } else {
+      // 2. Fallback to hardcoded config
+      this.initCloud(DEFAULT_FIREBASE_CONFIG);
+    }
+  }
 
   // Initialize Cloud Connection
-  initCloud(url: string, key: string) {
-    if (url && key) {
+  initCloud(config: FirebaseConfig) {
+    if (config && config.apiKey && config.projectId) {
       try {
-        this.supabase = createClient(url, key);
-        console.log("Cloud connection initialized");
+        // Prevent "Firebase App already exists" error in HMR/dev
+        if (getApps().length === 0) {
+            this.firebaseApp = initializeApp(config);
+        } else {
+            this.firebaseApp = getApp();
+        }
+        
+        this.firestore = getFirestore(this.firebaseApp);
+        console.log(`Firebase Cloud connection initialized (${config.projectId})`);
       } catch (e) {
         console.error("Invalid Cloud Config", e);
       }
     }
+  }
+  
+  isCloudConnected(): boolean {
+    return !!this.firestore;
   }
 
   async open(): Promise<IDBDatabase> {
@@ -86,21 +129,14 @@ class TrainDB {
       request.onerror = () => reject("Failed to save question locally");
     });
 
-    // 2. Save to Cloud (Fire and forget to not block UI)
-    if (this.supabase) {
-      this.supabase.from('questions').upsert({
-        id: question.id,
-        type: question.type,
-        text: question.text,
-        options: question.options,
-        correct_answer_index: question.correctAnswerIndex,
-        explanation: question.explanation,
-        difficulty_level: question.difficultyLevel,
-        visual_subject: question.visualSubject,
-        subject: subject
-      }).then(({ error }) => {
-        if (error) console.error("Cloud save error:", error);
-      });
+    // 2. Save to Cloud (Fire and forget)
+    if (this.firestore) {
+      // Use setDoc with merge to be safe
+      setDoc(doc(this.firestore, 'questions', question.id), {
+        ...question,
+        subject,
+        createdAt: new Date().toISOString()
+      }, { merge: true }).catch(e => console.error("Cloud save error:", e));
     }
   }
 
@@ -128,9 +164,9 @@ class TrainDB {
     });
 
     // 2. Update Cloud
-    if (this.supabase) {
-      this.supabase.from('questions').update({ difficulty_level: newDifficulty }).eq('id', id)
-        .then(({ error }) => { if(error) console.error("Cloud update error", error)});
+    if (this.firestore) {
+      setDoc(doc(this.firestore, 'questions', id), { difficultyLevel: newDifficulty }, { merge: true })
+        .catch(e => console.error("Cloud update error", e));
     }
   }
 
@@ -246,10 +282,10 @@ class TrainDB {
     });
   }
 
-  // --- CLOUD SYNC (New) ---
+  // --- CLOUD SYNC (FIREBASE) ---
   
   async syncLocalToCloud(): Promise<number> {
-    if (!this.supabase) throw new Error("Molnet ej konfigurerat");
+    if (!this.firestore) throw new Error("Molnet ej konfigurerat (Firebase)");
 
     // Get all local questions
     const db = await this.open();
@@ -260,53 +296,49 @@ class TrainDB {
       req.onsuccess = () => resolve(req.result);
     });
 
+    if (questions.length === 0) return 0;
+
+    // Firebase Batch Write (Max 500 per batch)
     let syncedCount = 0;
-    // Upload in batches or loop (simple loop for now as users wont have millions of rows)
-    for (const q of questions) {
-      const { error } = await this.supabase.from('questions').upsert({
-        id: q.id,
-        type: q.type,
-        text: q.text,
-        options: q.options,
-        correct_answer_index: q.correctAnswerIndex,
-        explanation: q.explanation,
-        difficulty_level: q.difficultyLevel,
-        visual_subject: q.visualSubject,
-        subject: q.subject
-      }, { onConflict: 'id' });
+    const BATCH_SIZE = 400; 
+    
+    for (let i = 0; i < questions.length; i += BATCH_SIZE) {
+      const batch = writeBatch(this.firestore);
+      const chunk = questions.slice(i, i + BATCH_SIZE);
       
-      if (!error) syncedCount++;
+      chunk.forEach(q => {
+        const docRef = doc(this.firestore!, 'questions', q.id);
+        // Ensure we don't have undefined values, convert to plain object
+        const safeData = JSON.parse(JSON.stringify(q));
+        batch.set(docRef, safeData, { merge: true });
+      });
+
+      await batch.commit();
+      syncedCount += chunk.length;
     }
+
     return syncedCount;
   }
 
   async syncCloudToLocal(): Promise<number> {
-    if (!this.supabase) throw new Error("Molnet ej konfigurerat");
+    if (!this.firestore) throw new Error("Molnet ej konfigurerat (Firebase)");
 
-    const { data, error } = await this.supabase.from('questions').select('*');
-    if (error || !data) throw error || new Error("Ingen data");
+    const querySnapshot = await getDocs(collection(this.firestore, 'questions'));
+    
+    if (querySnapshot.empty) return 0;
 
     const db = await this.open();
     const transaction = db.transaction([STORE_QUESTIONS], 'readwrite');
     const store = transaction.objectStore(STORE_QUESTIONS);
 
     let count = 0;
-    for (const row of data) {
-      // Convert snake_case back to camelCase object
-      const question: Question & { subject: string } = {
-        id: row.id,
-        type: row.type as any,
-        text: row.text,
-        options: row.options,
-        correctAnswerIndex: row.correct_answer_index,
-        explanation: row.explanation,
-        difficultyLevel: row.difficulty_level,
-        visualSubject: row.visual_subject,
-        subject: row.subject
-      };
-      store.put(question);
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      // Ensure correct type mapping if needed, Firestore returns standard JSON
+      store.put(data);
       count++;
-    }
+    });
+    
     return count;
   }
 
