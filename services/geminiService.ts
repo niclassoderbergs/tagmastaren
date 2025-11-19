@@ -456,8 +456,9 @@ export const batchGenerateQuestions = async (
   
   for (let i = 0; i < count; i++) {
     try {
-      // Add a small delay to be kind to the API rate limits (Free Tier)
-      if (i > 0) await delay(1000);
+      // Add a larger delay (4s) to be safe with Free Tier (approx 15 requests/min)
+      // 4000ms + execution time ensures we stay under limit
+      if (i > 0) await delay(4000);
 
       // Rotate through subjects
       const subject = subjects[i % subjects.length];
@@ -473,18 +474,20 @@ export const batchGenerateQuestions = async (
       console.error("Batch generation error at index " + i, error);
       
       const msg = error.message || String(error);
+      
       // Identify quota issues
       if (msg.includes('429') || msg.includes('quota')) {
-         if (onError) onError("Kvot överskriden (För många frågor för fort). Vänta lite.");
+         if (onError) onError(`Kvot överskriden (429). Vänta en stund. Detaljer: ${msg}`);
          break; // Stop batch
       }
+      // Identify API Key issues
       if (msg.includes('API key') || msg.includes('403')) {
-         if (onError) onError("Fel på AI-nyckeln. Kontrollera inställningarna.");
+         if (onError) onError(`Nyckelfel: ${msg}. Kontrollera att din API_KEY i .env är giltig.`);
          break; 
       }
       
-      // If just a random glitch, report but maybe continue?
-      if (onError) onError(`Fel vid fråga ${i+1}: ${msg.substring(0, 50)}...`);
+      // If just a random glitch, report but continue if possible, or break if critical
+      if (onError) onError(`Fel vid fråga ${i+1}: ${msg.substring(0, 80)}...`);
     }
   }
 };

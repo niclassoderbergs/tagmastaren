@@ -438,13 +438,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
           <div className="bg-amber-50 p-4 rounded-xl border-2 border-amber-100">
              <h3 className="font-bold text-amber-900 text-lg mb-2 border-b border-amber-200 pb-2">⚡ TURBO-LADDA (SKAPA MED AI)</h3>
              <p className="text-xs text-amber-800 mb-4">
-               Skapa frågor nu så din son slipper vänta! Använder <strong>AI-motorn</strong> för att generera.
+               Skapa frågor nu så din son slipper vänta! Använder <strong>AI-motorn (Nyckel i steg 1)</strong>.
              </p>
              
              {isGenerating ? (
                <div className="space-y-2">
                  <div className="flex justify-between text-xs font-bold text-amber-900">
-                   <span>GENERERAR FRÅGOR... (1 sek paus mellan varje)</span>
+                   <span>GENERERAR FRÅGOR... (4 sek paus mellan varje)</span>
                    <span>{genProgress} / {genTarget}</span>
                  </div>
                  <div className="h-4 bg-amber-200 rounded-full overflow-hidden">
@@ -454,7 +454,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                     ></div>
                  </div>
                  {genError && (
-                    <div className="bg-red-100 text-red-800 text-xs p-2 rounded border border-red-200 font-bold animate-pulse">
+                    <div className="bg-red-100 text-red-800 text-xs p-2 rounded border border-red-200 font-bold break-words">
                         STOPP: {genError}
                     </div>
                  )}
@@ -476,7 +476,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                     </button>
                  </div>
                  {genError && (
-                    <div className="bg-red-100 text-red-800 text-xs p-2 rounded border border-red-200 font-bold text-center">
+                    <div className="bg-red-100 text-red-800 text-xs p-2 rounded border border-red-200 font-bold text-center break-words">
                         Senaste felet: {genError}
                     </div>
                  )}
