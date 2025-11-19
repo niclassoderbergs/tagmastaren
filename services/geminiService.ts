@@ -3,8 +3,18 @@ import { GoogleGenAI, Type, Schema, Modality } from "@google/genai";
 import { Subject, Question, QuestionType } from "../types";
 import { trainDb } from "./db";
 
+const STORAGE_KEY_API = 'trainMasterApiKey';
+
 // Helper to clean key if user accidentally pasted quotes in Vercel
 const getCleanApiKey = () => {
+  // 1. Try LocalStorage first (Persistent manual override)
+  // This fixes the issue where Vercel env vars are stale or broken.
+  if (typeof window !== 'undefined') {
+      const local = localStorage.getItem(STORAGE_KEY_API);
+      if (local && local.length > 10) return local.trim();
+  }
+
+  // 2. Fallback to Environment Variable
   const key = process.env.API_KEY || "";
   return key.replace(/["']/g, "").trim();
 };
@@ -13,7 +23,18 @@ let apiKey = getCleanApiKey();
 let ai = new GoogleGenAI({ apiKey: apiKey });
 
 export const setRuntimeApiKey = (newKey: string) => {
-  apiKey = newKey.trim();
+  const cleaned = newKey.trim();
+  apiKey = cleaned;
+  
+  // Persist to local storage so it survives refresh
+  if (typeof window !== 'undefined') {
+      if (cleaned.length > 0) {
+          localStorage.setItem(STORAGE_KEY_API, cleaned);
+      } else {
+          localStorage.removeItem(STORAGE_KEY_API);
+      }
+  }
+
   // Re-initialize the client with the new key
   ai = new GoogleGenAI({ apiKey: apiKey });
 };

@@ -32,7 +32,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
   const [connectionErrorMsg, setConnectionErrorMsg] = useState<string>("");
   const [cloudStatus, setCloudStatus] = useState<string>("");
   const [tempFirebaseConfig, setTempFirebaseConfig] = useState<string>("");
+  
+  // Load persisted key for display
   const [manualKey, setManualKey] = useState<string>("");
+  
+  useEffect(() => {
+      const savedKey = localStorage.getItem('trainMasterApiKey');
+      if (savedKey) setManualKey(savedKey);
+  }, []);
   
   // Cloud Stats
   const [cloudCount, setCloudCount] = useState<number | null>(null);
@@ -44,9 +51,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
   const [genTarget, setGenTarget] = useState(0);
   const [genError, setGenError] = useState<string>("");
 
-  const hasKey = Boolean(process.env.API_KEY) || manualKey.length > 0;
-  const isEnvConnected = trainDb.isCloudConnected();
+  // Check current active key from service debug
   const keyDebug = getApiKeyDebug();
+  const hasKey = keyDebug !== "SAKNAS" && keyDebug !== "*****";
+  const isEnvConnected = trainDb.isCloudConnected();
 
   // Initialize DB cloud connection if settings exist manually
   useEffect(() => {
@@ -158,7 +166,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
   };
 
   const handleTestConnection = async () => {
-    // If manual key is present, inject it
+    // If manual key is present, inject it and SAVE IT
     if (manualKey.trim().length > 10) {
        setRuntimeApiKey(manualKey.trim());
     }
@@ -267,7 +275,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                 </div>
                 
                 <div className="flex flex-col gap-1 mt-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase text-left">Mata in nyckel manuellt (förbikoppla .env):</label>
+                  <label className="text-xs font-bold text-slate-500 uppercase text-left">Mata in nyckel manuellt (Sparad i webbläsaren):</label>
                   <input 
                     type="password"
                     value={manualKey}
@@ -286,9 +294,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                     'bg-white text-blue-600 border border-blue-200 hover:bg-blue-100'
                   }`}
                 >
-                  {connectionStatus === 'idle' && "📡 TESTA AI-KOPPLING"}
+                  {connectionStatus === 'idle' && "📡 TESTA & SPARA NYCKEL"}
                   {connectionStatus === 'testing' && "KONTROLLERAR..."}
-                  {connectionStatus === 'success' && "✅ NYCKELN FUNGERAR!"}
+                  {connectionStatus === 'success' && "✅ NYCKELN SPARAD!"}
                   {connectionStatus === 'error' && "❌ FEL PÅ NYCKELN"}
                 </button>
 
