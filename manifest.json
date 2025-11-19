@@ -1,0 +1,16 @@
+{
+  "name": "Tågmästaren",
+  "short_name": "Tågmästaren",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#e0f2fe",
+  "theme_color": "#e0f2fe",
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/235/235861.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
