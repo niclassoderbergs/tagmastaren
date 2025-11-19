@@ -53,7 +53,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
 
   // Key Source Info
   const keyDebug = getApiKeyDebug();
-  const keySource = getKeySource(); // 'MANUAL' | 'ENV_VITE' | 'NONE'
+  const keySource = getKeySource(); // 'MANUAL' | 'ENV_VITE' | 'ENV_PROCESS' | 'NONE'
   const isBlocked = isEnvKeyBlocked();
   const hasKey = keySource !== 'NONE';
 
@@ -293,6 +293,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                      <div className="text-[10px] text-slate-400 uppercase font-bold">KÄLLA</div>
                      {keySource === 'MANUAL' && <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded font-bold">MANUELL</span>}
                      {keySource === 'ENV_VITE' && <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded font-bold">ENV (VITE_) ✅</span>}
+                     {keySource === 'ENV_PROCESS' && <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded font-bold">ENV (VERCEL) ✅</span>}
                      {keySource === 'NONE' && <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded font-bold">INGEN</span>}
                   </div>
                 </div>
@@ -312,7 +313,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
 
                 {!hasKey && !isBlocked && (
                   <div className="text-xs text-red-600 bg-red-50 p-2 rounded border border-red-100 text-left">
-                    <span className="font-bold">TIPS:</span> Döp om din variabel i Vercel till <code>VITE_GOOGLE_AI_API_KEY</code> för att den ska hittas automatiskt.
+                    <span className="font-bold">TIPS:</span> Kontrollera att du har en variabel som heter <code>GOOGLE_AI_API_KEY</code> eller <code>VITE_GOOGLE_AI_API_KEY</code> i Vercel.
                   </div>
                 )}
                 
@@ -630,4 +631,4 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
       </div>
     </div>
   );
-};
+}

@@ -22,14 +22,21 @@ const getCleanApiKey = () => {
 
   if (blockEnv) return "";
 
-  // 2. Try Standard Vite Environment Variable (Primary)
+  // 2. Try Injected Process Env (via vite.config.ts define) - Handles GOOGLE_AI_API_KEY
+  // @ts-ignore
+  if (typeof process !== 'undefined' && process.env && process.env.GOOGLE_AI_API_KEY) {
+    // @ts-ignore
+    return process.env.GOOGLE_AI_API_KEY.trim();
+  }
+
+  // 3. Try Standard Vite Environment Variable (VITE_GOOGLE_AI_API_KEY)
   // @ts-ignore
   if (import.meta.env && import.meta.env.VITE_GOOGLE_AI_API_KEY) {
     // @ts-ignore
     return import.meta.env.VITE_GOOGLE_AI_API_KEY.trim();
   }
   
-  // Fallback alias (sometimes used)
+  // Fallback alias
   // @ts-ignore
   if (import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) {
      // @ts-ignore
@@ -42,7 +49,7 @@ const getCleanApiKey = () => {
 let apiKey = getCleanApiKey();
 let ai = new GoogleGenAI({ apiKey: apiKey });
 
-export const getKeySource = (): 'MANUAL' | 'ENV_VITE' | 'NONE' => {
+export const getKeySource = (): 'MANUAL' | 'ENV_VITE' | 'ENV_PROCESS' | 'NONE' => {
   if (typeof window !== 'undefined') {
     const local = localStorage.getItem(STORAGE_KEY_API);
     if (local && local.length > 10) return 'MANUAL';
@@ -55,6 +62,8 @@ export const getKeySource = (): 'MANUAL' | 'ENV_VITE' | 'NONE' => {
   }
 
   if (!blockEnv) {
+    // @ts-ignore
+    if (typeof process !== 'undefined' && process.env && process.env.GOOGLE_AI_API_KEY) return 'ENV_PROCESS';
     // @ts-ignore
     if (import.meta.env && (import.meta.env.VITE_GOOGLE_AI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY)) return 'ENV_VITE';
   }
