@@ -162,6 +162,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
     
     if (result.success) {
        setConnectionStatus('success');
+       // UX Improvement: If key works, clear any lingering error in the generator UI
+       setGenError(""); 
     } else {
        setConnectionStatus('error');
        setConnectionErrorMsg(result.message || "Okänt fel");
@@ -266,7 +268,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                 >
                   {connectionStatus === 'idle' && "📡 TESTA AI-KOPPLING"}
                   {connectionStatus === 'testing' && "KONTROLLERAR..."}
-                  {connectionStatus === 'success' && "✅ ALLT FUNGERAR!"}
+                  {connectionStatus === 'success' && "✅ NYCKELN FUNGERAR!"}
                   {connectionStatus === 'error' && "❌ FEL PÅ NYCKELN"}
                 </button>
 
