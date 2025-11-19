@@ -163,6 +163,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
     }
   };
 
+  const handleCheckCloud = async () => {
+    setCloudStatus("Kontrollerar...");
+    const count = await trainDb.getCloudQuestionCount();
+    if (count === -1) {
+      setCloudStatus("Kunde inte nå databasen.");
+    } else {
+      setCloudStatus(`✅ Hittade ${count} frågor i molnet.`);
+    }
+  };
+
+  const handleSendTestData = async () => {
+    setCloudStatus("Skickar testdata...");
+    try {
+      await trainDb.sendTestData();
+      setCloudStatus("✅ Testdata skickat! Kolla i Firebase-konsolen.");
+    } catch (e: any) {
+      console.error(e);
+      setCloudStatus("❌ Fel: " + e.message);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border-4 border-blue-200 p-6 relative animate-bounce-in my-8">
@@ -293,7 +314,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
           <div className="bg-orange-50 p-4 rounded-xl border-2 border-orange-100">
              <h3 className="font-bold text-orange-900 text-lg mb-2 border-b border-orange-200 pb-2">🔥 MOLN-KOPPLING (FIREBASE)</h3>
              <p className="text-xs text-orange-800 mb-4">
-               Spara frågor säkert i Googles moln. Använd <code>.env.local</code> för att slippa skriva in nyckeln här.
+               Spara frågor säkert i Googles moln. <strong>Obs:</strong> Bilder sparas bara lokalt för att spara utrymme.
              </p>
              
              {isEnvConnected ? (
@@ -317,7 +338,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                </div>
              )}
              
-             <div className="flex gap-2">
+             <div className="flex gap-2 mb-3">
                 <button
                   onClick={() => handleCloudSync('up')}
                   className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 rounded-lg text-sm shadow-sm active:scale-95"
@@ -331,15 +352,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                   ⬆ HÄMTA FRÅN MOLN
                 </button>
              </div>
+
+             <div className="flex gap-2">
+               <button
+                  onClick={handleCheckCloud}
+                  className="flex-1 bg-orange-100 hover:bg-orange-200 text-orange-900 font-bold py-2 rounded-lg text-sm border border-orange-300 active:scale-95 flex items-center justify-center gap-2"
+               >
+                 <span>🔍</span> KONTROLLERA
+               </button>
+               
+               <button
+                  onClick={handleSendTestData}
+                  className="flex-1 bg-white hover:bg-red-50 text-red-800 font-bold py-2 rounded-lg text-sm border border-red-200 active:scale-95 flex items-center justify-center gap-2"
+                  title="Skapa en test-post i databasen för att se att allt fungerar"
+               >
+                 <span>🧪</span> SKICKA TESTDATA
+               </button>
+             </div>
+
              {cloudStatus && (
-                <div className="mt-2 text-center text-xs font-bold text-orange-800">
+                <div className="mt-2 text-center text-xs font-bold text-orange-800 animate-pulse bg-white/50 p-1 rounded">
                   {cloudStatus}
                 </div>
              )}
           </div>
 
           <div className="bg-indigo-50 p-4 rounded-xl border-2 border-indigo-100">
-            <h3 className="font-bold text-slate-800 text-lg mb-4 border-b border-indigo-200 pb-2">DIN SPARADE KUNSKAP</h3>
+            <h3 className="font-bold text-slate-800 text-lg mb-4 border-b border-indigo-200 pb-2">DIN SPARADE KUNSKAP (LOKALT)</h3>
             
             {dbStats ? (
               <div className="grid grid-cols-2 gap-2 mb-6">

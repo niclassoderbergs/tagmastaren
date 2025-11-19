@@ -289,6 +289,36 @@ class TrainDB {
   }
 
   // --- CLOUD SYNC (FIREBASE) ---
+
+  /**
+   * Checks how many questions are currently stored in the cloud.
+   * Returns -1 if not connected or error.
+   */
+  async getCloudQuestionCount(): Promise<number> {
+    if (!this.firestore) return -1;
+    try {
+      // getDocs grabs all headers, effectively counting them
+      const querySnapshot = await getDocs(collection(this.firestore, 'questions'));
+      return querySnapshot.size;
+    } catch (e) {
+      console.error("Failed to check cloud count", e);
+      return -1;
+    }
+  }
+
+  /**
+   * Sends a dummy document to Firestore to verify connection and permissions.
+   */
+  async sendTestData(): Promise<void> {
+    if (!this.firestore) throw new Error("Molnet ej konfigurerat");
+    
+    const testDocRef = doc(this.firestore, '_connection_test', 'ping');
+    await setDoc(testDocRef, {
+      message: "Connection Successful",
+      timestamp: new Date().toISOString(),
+      platform: navigator.userAgent
+    });
+  }
   
   async syncLocalToCloud(): Promise<number> {
     if (!this.firestore) throw new Error("Molnet ej konfigurerat (Firebase)");
