@@ -9,8 +9,14 @@ const getCleanApiKey = () => {
   return key.replace(/["']/g, "").trim();
 };
 
-const apiKey = getCleanApiKey();
-const ai = new GoogleGenAI({ apiKey: apiKey });
+let apiKey = getCleanApiKey();
+let ai = new GoogleGenAI({ apiKey: apiKey });
+
+export const setRuntimeApiKey = (newKey: string) => {
+  apiKey = newKey.trim();
+  // Re-initialize the client with the new key
+  ai = new GoogleGenAI({ apiKey: apiKey });
+};
 
 // In-memory fallback only used for very first load if DB is empty and API fails
 const imageCache = new Map<string, string>(); // Keep a small RAM cache for immediate reuse in session

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { AppSettings, Subject, FirebaseConfig } from '../types';
 import { trainDb, DbStats } from '../services/db';
-import { testApiKey, batchGenerateQuestions, getApiKeyDebug } from '../services/geminiService';
+import { testApiKey, batchGenerateQuestions, getApiKeyDebug, setRuntimeApiKey } from '../services/geminiService';
 
 interface SettingsModalProps {
   settings: AppSettings;
@@ -32,6 +32,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
   const [connectionErrorMsg, setConnectionErrorMsg] = useState<string>("");
   const [cloudStatus, setCloudStatus] = useState<string>("");
   const [tempFirebaseConfig, setTempFirebaseConfig] = useState<string>("");
+  const [manualKey, setManualKey] = useState<string>("");
   
   // Cloud Stats
   const [cloudCount, setCloudCount] = useState<number | null>(null);
@@ -43,7 +44,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
   const [genTarget, setGenTarget] = useState(0);
   const [genError, setGenError] = useState<string>("");
 
-  const hasKey = Boolean(process.env.API_KEY);
+  const hasKey = Boolean(process.env.API_KEY) || manualKey.length > 0;
   const isEnvConnected = trainDb.isCloudConnected();
   const keyDebug = getApiKeyDebug();
 
@@ -157,6 +158,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
   };
 
   const handleTestConnection = async () => {
+    // If manual key is present, inject it
+    if (manualKey.trim().length > 10) {
+       setRuntimeApiKey(manualKey.trim());
+    }
+
     setConnectionStatus('testing');
     setConnectionErrorMsg("");
     
@@ -259,6 +265,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                      {keyDebug}
                    </span>
                 </div>
+                
+                <div className="flex flex-col gap-1 mt-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase text-left">Mata in nyckel manuellt (förbikoppla .env):</label>
+                  <input 
+                    type="password"
+                    value={manualKey}
+                    onChange={(e) => setManualKey(e.target.value)}
+                    placeholder="Klistra in din AIza-nyckel här..."
+                    className="w-full p-2 rounded border border-blue-200 text-sm font-mono"
+                  />
+                </div>
+
                 <button 
                   onClick={handleTestConnection}
                   disabled={connectionStatus === 'testing'}
