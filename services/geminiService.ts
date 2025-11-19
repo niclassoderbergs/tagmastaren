@@ -22,7 +22,7 @@ const getCleanApiKey = () => {
 
   // 2. Fallback to Environment Variable (ONLY if not blocked)
   if (!blockEnv) {
-    const key = process.env.API_KEY || "";
+    const key = process.env.GOOGLE_AI_API_KEY || "";
     return key.replace(/["']/g, "").trim();
   }
 
@@ -44,7 +44,7 @@ export const getKeySource = (): 'MANUAL' | 'ENV' | 'NONE' => {
     blockEnv = localStorage.getItem(STORAGE_KEY_BLOCK_ENV) === 'true';
   }
 
-  if (!blockEnv && process.env.API_KEY && process.env.API_KEY.length > 5) return 'ENV';
+  if (!blockEnv && process.env.GOOGLE_AI_API_KEY && process.env.GOOGLE_AI_API_KEY.length > 5) return 'ENV';
   return 'NONE';
 };
 
@@ -589,7 +589,7 @@ export const batchGenerateQuestions = async (
       }
       
       if (msg.includes('API key') || msg.includes('403')) {
-         if (onError) onError(`Nyckelfel: Kontrollera att din API_KEY i .env är giltig.`);
+         if (onError) onError(`Nyckelfel: Kontrollera att din GOOGLE_AI_API_KEY i .env är giltig.`);
          break; 
       }
       
