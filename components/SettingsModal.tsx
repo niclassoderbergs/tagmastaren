@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { AppSettings, Subject, FirebaseConfig } from '../types';
 import { trainDb, DbStats } from '../services/db';
-import { testApiKey, batchGenerateQuestions, getApiKeyDebug, setRuntimeApiKey } from '../services/geminiService';
+import { testApiKey, batchGenerateQuestions, getApiKeyDebug, setRuntimeApiKey, clearRuntimeApiKey, getKeySource, toggleBlockEnvKey, isEnvKeyBlocked } from '../services/geminiService';
 
 interface SettingsModalProps {
   settings: AppSettings;
@@ -51,9 +51,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
   const [genTarget, setGenTarget] = useState(0);
   const [genError, setGenError] = useState<string>("");
 
-  // Check current active key from service debug
+  // Key Source Info
   const keyDebug = getApiKeyDebug();
-  const hasKey = keyDebug !== "SAKNAS" && keyDebug !== "*****";
+  const keySource = getKeySource(); // 'MANUAL' | 'ENV' | 'NONE'
+  const isBlocked = isEnvKeyBlocked();
+  const hasKey = keySource !== 'NONE';
+
   const isEnvConnected = trainDb.isCloudConnected();
 
   // Initialize DB cloud connection if settings exist manually
@@ -113,8 +116,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
         },
         (errorMsg) => {
             setGenError(errorMsg);
-            // We don't necessarily stop the UI spinner here, as partial success is possible, 
-            // but the service might break the loop.
         }
     );
     
@@ -178,7 +179,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
     
     if (result.success) {
        setConnectionStatus('success');
-       // UX Improvement: If key works, clear any lingering error in the generator UI
        setGenError(""); 
     } else {
        setConnectionStatus('error');
@@ -188,6 +188,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
     setTimeout(() => {
       if (connectionStatus !== 'error') setConnectionStatus('idle');
     }, 5000);
+  };
+  
+  const handleClearKey = () => {
+    clearRuntimeApiKey();
+    setManualKey("");
+    setConnectionStatus('idle');
+  };
+  
+  const handleToggleBlockEnv = () => {
+     const newState = !isBlocked;
+     toggleBlockEnvKey(newState);
+     // Force re-render logic by updating state implicitly
+     setConnectionStatus('idle'); 
   };
 
   const handleSaveFirebaseConfig = () => {
@@ -267,15 +280,38 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
           <div className="flex flex-col gap-3 pt-4 border-b-2 border-blue-100 pb-6">
              <h3 className="font-bold text-slate-800 text-lg">1. AI-MOTORN (Google Gemini)</h3>
              <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-center space-y-3">
-                <div className="text-xs text-slate-500 flex justify-center gap-2">
-                   LADDAD NYCKEL: 
-                   <span className={hasKey ? "text-slate-700 font-mono font-bold" : "text-red-600 font-bold"}>
-                     {keyDebug}
-                   </span>
-                </div>
                 
-                <div className="flex flex-col gap-1 mt-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase text-left">Mata in nyckel manuellt (Sparad i webbläsaren):</label>
+                <div className="flex items-center justify-between bg-white p-2 rounded border border-blue-100">
+                  <div className="text-left">
+                    <div className="text-[10px] text-slate-400 uppercase font-bold">AKTIV NYCKEL</div>
+                    <div className={hasKey ? "text-slate-700 font-mono font-bold" : "text-red-600 font-bold"}>
+                      {keyDebug}
+                    </div>
+                  </div>
+                  
+                  <div className="text-right">
+                     <div className="text-[10px] text-slate-400 uppercase font-bold">KÄLLA</div>
+                     {keySource === 'MANUAL' && <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded font-bold">MANUELL</span>}
+                     {keySource === 'ENV' && <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded font-bold">SERVER (Gammal?)</span>}
+                     {keySource === 'NONE' && <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded font-bold">INGEN</span>}
+                  </div>
+                </div>
+
+                {/* Block Environment Key Toggle */}
+                {keySource !== 'MANUAL' && (
+                  <div className="flex items-center justify-between text-xs px-2">
+                    <span className="text-slate-500">Använd server-nyckel (process.env)?</span>
+                    <button 
+                      onClick={handleToggleBlockEnv}
+                      className={`px-3 py-1 rounded-full font-bold transition-colors ${!isBlocked ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-500'}`}
+                    >
+                      {isBlocked ? "AVSTÄNGD (BLOCKERAD)" : "PÅ (TILLÅTEN)"}
+                    </button>
+                  </div>
+                )}
+                
+                <div className="flex flex-col gap-1 mt-2 border-t border-blue-100 pt-3">
+                  <label className="text-xs font-bold text-slate-500 uppercase text-left">Mata in nyckel manuellt:</label>
                   <input 
                     type="password"
                     value={manualKey}
@@ -284,21 +320,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                     className="w-full p-2 rounded border border-blue-200 text-sm font-mono"
                   />
                 </div>
-
-                <button 
-                  onClick={handleTestConnection}
-                  disabled={connectionStatus === 'testing'}
-                  className={`w-full py-2 px-4 rounded-lg text-sm font-bold transition-colors flex justify-center items-center gap-2 ${
-                    connectionStatus === 'success' ? 'bg-green-100 text-green-700 border border-green-300' :
-                    connectionStatus === 'error' ? 'bg-red-100 text-red-700 border border-red-300' :
-                    'bg-white text-blue-600 border border-blue-200 hover:bg-blue-100'
-                  }`}
-                >
-                  {connectionStatus === 'idle' && "📡 TESTA & SPARA NYCKEL"}
-                  {connectionStatus === 'testing' && "KONTROLLERAR..."}
-                  {connectionStatus === 'success' && "✅ NYCKELN SPARAD!"}
-                  {connectionStatus === 'error' && "❌ FEL PÅ NYCKELN"}
-                </button>
+                
+                <div className="flex gap-2">
+                    <button 
+                      onClick={handleTestConnection}
+                      disabled={connectionStatus === 'testing'}
+                      className={`flex-1 py-2 px-4 rounded-lg text-sm font-bold transition-colors flex justify-center items-center gap-2 ${
+                        connectionStatus === 'success' ? 'bg-green-100 text-green-700 border border-green-300' :
+                        connectionStatus === 'error' ? 'bg-red-100 text-red-700 border border-red-300' :
+                        'bg-white text-blue-600 border border-blue-200 hover:bg-blue-100'
+                      }`}
+                    >
+                      {connectionStatus === 'idle' && "📡 TESTA & SPARA"}
+                      {connectionStatus === 'testing' && "KONTROLLERAR..."}
+                      {connectionStatus === 'success' && "✅ OK!"}
+                      {connectionStatus === 'error' && "❌ FEL"}
+                    </button>
+                    
+                    {keySource === 'MANUAL' && (
+                      <button
+                        onClick={handleClearKey}
+                        className="bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-lg px-3 py-2 text-xs font-bold active:scale-95"
+                        title="Rensa manuell nyckel"
+                      >
+                        RENSA 🗑️
+                      </button>
+                    )}
+                </div>
 
                 {connectionStatus === 'error' && connectionErrorMsg && (
                   <div className="bg-red-50 p-2 rounded text-xs font-mono text-red-800 break-all border border-red-100">

@@ -4,23 +4,65 @@ import { Subject, Question, QuestionType } from "../types";
 import { trainDb } from "./db";
 
 const STORAGE_KEY_API = 'trainMasterApiKey';
+const STORAGE_KEY_BLOCK_ENV = 'trainMasterBlockEnv';
 
 // Helper to clean key if user accidentally pasted quotes in Vercel
 const getCleanApiKey = () => {
+  // 0. Check if user has explicitly blocked the environment key
+  let blockEnv = false;
+  if (typeof window !== 'undefined') {
+    blockEnv = localStorage.getItem(STORAGE_KEY_BLOCK_ENV) === 'true';
+  }
+
   // 1. Try LocalStorage first (Persistent manual override)
-  // This fixes the issue where Vercel env vars are stale or broken.
   if (typeof window !== 'undefined') {
       const local = localStorage.getItem(STORAGE_KEY_API);
       if (local && local.length > 10) return local.trim();
   }
 
-  // 2. Fallback to Environment Variable
-  const key = process.env.API_KEY || "";
-  return key.replace(/["']/g, "").trim();
+  // 2. Fallback to Environment Variable (ONLY if not blocked)
+  if (!blockEnv) {
+    const key = process.env.API_KEY || "";
+    return key.replace(/["']/g, "").trim();
+  }
+
+  return "";
 };
 
 let apiKey = getCleanApiKey();
 let ai = new GoogleGenAI({ apiKey: apiKey });
+
+export const getKeySource = (): 'MANUAL' | 'ENV' | 'NONE' => {
+  if (typeof window !== 'undefined') {
+    const local = localStorage.getItem(STORAGE_KEY_API);
+    if (local && local.length > 10) return 'MANUAL';
+  }
+  
+  // Check if blocked
+  let blockEnv = false;
+  if (typeof window !== 'undefined') {
+    blockEnv = localStorage.getItem(STORAGE_KEY_BLOCK_ENV) === 'true';
+  }
+
+  if (!blockEnv && process.env.API_KEY && process.env.API_KEY.length > 5) return 'ENV';
+  return 'NONE';
+};
+
+export const isEnvKeyBlocked = (): boolean => {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem(STORAGE_KEY_BLOCK_ENV) === 'true';
+  }
+  return false;
+};
+
+export const toggleBlockEnvKey = (shouldBlock: boolean) => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(STORAGE_KEY_BLOCK_ENV, String(shouldBlock));
+    // Re-eval key
+    apiKey = getCleanApiKey();
+    ai = new GoogleGenAI({ apiKey: apiKey });
+  }
+};
 
 export const setRuntimeApiKey = (newKey: string) => {
   const cleaned = newKey.trim();
@@ -36,6 +78,17 @@ export const setRuntimeApiKey = (newKey: string) => {
   }
 
   // Re-initialize the client with the new key
+  ai = new GoogleGenAI({ apiKey: apiKey });
+};
+
+export const clearRuntimeApiKey = () => {
+  apiKey = getCleanApiKey(); // Will revert to Env key if not blocked, or empty if blocked
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(STORAGE_KEY_API);
+    // Note: We do NOT clear the blockEnv setting here, that is separate
+  }
+  // Re-eval
+  apiKey = getCleanApiKey();
   ai = new GoogleGenAI({ apiKey: apiKey });
 };
 
@@ -243,7 +296,7 @@ export const testApiKey = async (): Promise<{ success: boolean; message?: string
   try {
     // Minimal request to check auth and project validity
     if (!apiKey) {
-      return { success: false, message: "API Key is missing (process.env.API_KEY is empty)" };
+      return { success: false, message: "Ingen nyckel laddad." };
     }
 
     await ai.models.generateContent({
@@ -256,10 +309,10 @@ export const testApiKey = async (): Promise<{ success: boolean; message?: string
     
     const msg = error.message || String(error);
     if (msg.includes('expired') || msg.includes('API_KEY_INVALID')) {
-        return { success: false, message: "Din API-nyckel har gått ut. Skapa en ny hos Google." };
+        return { success: false, message: "Din API-nyckel har gått ut eller är felaktig." };
     }
 
-    return { success: false, message: error.message || "Unknown API error" };
+    return { success: false, message: error.message || "Okänt fel vid anslutning" };
   }
 };
 
