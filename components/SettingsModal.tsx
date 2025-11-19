@@ -37,12 +37,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
   const [cloudStatus, setCloudStatus] = useState<string>("");
   const [tempFirebaseConfig, setTempFirebaseConfig] = useState<string>("");
   
+  // Banned Topics State for editing
+  const [bannedTopicsInput, setBannedTopicsInput] = useState<string>("");
+  
   // Load persisted key for display
   const [manualKey, setManualKey] = useState<string>("");
   
   useEffect(() => {
       const savedKey = localStorage.getItem('trainMasterApiKey');
       if (savedKey) setManualKey(savedKey);
+      
+      // Initialize ban list input
+      if (settings.bannedTopics) {
+        setBannedTopicsInput(settings.bannedTopics.join(', '));
+      }
   }, []);
   
   // Cloud Stats
@@ -118,6 +126,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
       }
     });
   };
+  
+  const handleSaveBannedTopics = () => {
+    const list = bannedTopicsInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
+    onUpdateSettings({
+      ...settings,
+      bannedTopics: list
+    });
+  };
 
   const handleBatchGenerate = async (count: number) => {
     if (!hasKey) {
@@ -130,10 +146,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
     setGenProgress(0);
     setGenError("");
     
+    const banList = settings.enableBannedTopics ? settings.bannedTopics : [];
+    
     await batchGenerateQuestions(
         count, 
         settings.useDigits, 
         settings.subjectDifficulty, 
+        banList,
         (done) => {
             setGenProgress(done);
         },
@@ -297,6 +316,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
     return dbStats.mathCount + dbStats.languageCount + dbStats.logicCount + dbStats.physicsCount;
   };
 
+  const getAiUsageLevel = (total: number) => {
+      if (total < 50) return { level: 1, ai: 100, db: 0, desc: "BYGGER UPP DATABAS" };
+      if (total < 100) return { level: 2, ai: 20, db: 80, desc: "BLANDAR NYTT & GAMMALT" };
+      if (total < 200) return { level: 3, ai: 10, db: 90, desc: "UNDERHÅLLSLÄGE" };
+      return { level: 4, ai: 5, db: 95, desc: "SPARLÄGE (Mest databas)" };
+  };
+
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -304,6 +330,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
+
+  const aiLogic = getAiUsageLevel(getTotalLocalQuestions());
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 overflow-y-auto">
@@ -410,7 +438,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                       <span>🔧</span> Avancerade Inställningar
                    </button>
                    <p className="text-[10px] text-center text-slate-400 mt-2">
-                     Databas, AI-nycklar, Backup och Turbo-laddning
+                     Databas, AI-nycklar, Backup, Filter och Turbo-laddning
                    </p>
                 </div>
 
@@ -522,6 +550,52 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                    </div>
                 </div>
 
+                {/* AI LOGIC & PROBABILITY */}
+                <div className="bg-cyan-50 p-4 rounded-xl border-2 border-cyan-100">
+                  <h3 className="font-bold text-cyan-900 text-lg mb-2 border-b border-cyan-200 pb-2">
+                    🤖 AI-LOGIK & BLANDNING
+                  </h3>
+                  <p className="text-xs text-cyan-800 mb-4">
+                    Här ser du hur appen väljer mellan att skapa <strong>nya frågor (AI)</strong> och att återanvända <strong>gamla frågor (Databas)</strong> för varje ämne.
+                  </p>
+
+                  <div className="bg-white rounded-lg border border-cyan-200 overflow-hidden text-xs">
+                    <div className="grid grid-cols-4 bg-cyan-100 p-2 font-bold text-cyan-900">
+                      <div>ANTAL I DB</div>
+                      <div>AI (NYTT)</div>
+                      <div>DATABAS</div>
+                      <div>FAS</div>
+                    </div>
+                    {[
+                      { min: 0, max: 49, ai: '100%', db: '0%', name: 'BYGG' },
+                      { min: 50, max: 99, ai: '20%', db: '80%', name: 'BLANDA' },
+                      { min: 100, max: 199, ai: '10%', db: '90%', name: 'UNDERHÅLL' },
+                      { min: 200, max: 9999, ai: '5%', db: '95%', name: 'SPARA' },
+                    ].map((tier, idx) => {
+                      const isActive = getTotalLocalQuestions() >= tier.min && getTotalLocalQuestions() <= tier.max;
+                      return (
+                        <div key={idx} className={`grid grid-cols-4 p-2 border-t border-cyan-50 ${isActive ? 'bg-yellow-100 font-bold' : ''}`}>
+                          <div>{tier.min === 200 ? '200+' : `${tier.min}-${tier.max}`}</div>
+                          <div className="text-purple-600">{tier.ai}</div>
+                          <div className="text-green-600">{tier.db}</div>
+                          <div>{tier.name}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  
+                  <div className="mt-3 bg-white p-2 rounded border border-cyan-200 flex justify-between items-center">
+                     <div>
+                        <div className="text-[10px] uppercase font-bold text-slate-400">DIN STATUS JUST NU:</div>
+                        <div className="font-bold text-cyan-900">{aiLogic.desc}</div>
+                     </div>
+                     <div className="text-right">
+                        <div className="text-xl font-black text-purple-600">{aiLogic.ai}% AI</div>
+                        <div className="text-[10px] text-slate-400">CHANS FÖR NY FRÅGA</div>
+                     </div>
+                  </div>
+                </div>
+
                 {/* CLOUD SYNC SECTION - FIREBASE */}
                 <div className="bg-orange-50 p-4 rounded-xl border-2 border-orange-100">
                    <h3 className="font-bold text-orange-900 text-lg mb-2 border-b border-orange-200 pb-2">2. DATABAS (FIREBASE)</h3>
@@ -624,10 +698,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                       </div>
                    )}
                 </div>
+                
+                {/* CONTENT CONTROL - BANNED TOPICS */}
+                <div className="bg-rose-50 p-4 rounded-xl border-2 border-rose-100">
+                    <div className="flex justify-between items-center mb-3 border-b border-rose-200 pb-2">
+                        <h3 className="font-bold text-rose-900 text-lg">3. STYRNING AV INNEHÅLL</h3>
+                        
+                        <button 
+                            onClick={() => onUpdateSettings({ ...settings, enableBannedTopics: !settings.enableBannedTopics })}
+                            className={`w-12 h-6 rounded-full transition-colors duration-300 relative flex items-center ${settings.enableBannedTopics ? 'bg-green-500' : 'bg-slate-300'}`}
+                        >
+                            <div 
+                                className={`w-4 h-4 bg-white rounded-full shadow-md absolute transition-transform duration-300 ${settings.enableBannedTopics ? 'translate-x-7' : 'translate-x-1'}`}
+                            ></div>
+                        </button>
+                    </div>
+                    
+                    <p className="text-xs text-rose-800 mb-2">
+                        Här kan du ange ämnen som du vill att AI:n ska <strong>undvika</strong> att fråga om. Separera med kommatecken.
+                    </p>
+                    
+                    <textarea
+                        className={`w-full p-3 rounded border text-sm font-sans ${settings.enableBannedTopics ? 'border-rose-300 bg-white' : 'border-slate-200 bg-slate-100 text-slate-400'}`}
+                        rows={4}
+                        value={bannedTopicsInput}
+                        onChange={(e) => setBannedTopicsInput(e.target.value)}
+                        onBlur={handleSaveBannedTopics}
+                        disabled={!settings.enableBannedTopics}
+                        placeholder="T.ex: Hjulet, Is, Planeter..."
+                    />
+                    <div className="text-[10px] text-right text-rose-600 mt-1 font-bold">
+                        {settings.enableBannedTopics ? "Listan är aktiv. Klicka utanför rutan för att spara." : "Blockering avstängd."}
+                    </div>
+                </div>
 
                 {/* TURBO CHARGE & GENERATOR */}
                 <div className="bg-amber-50 p-4 rounded-xl border-2 border-amber-100">
-                   <h3 className="font-bold text-amber-900 text-lg mb-2 border-b border-amber-200 pb-2">⚡ TURBO-LADDA (SKAPA MED AI)</h3>
+                   <h3 className="font-bold text-amber-900 text-lg mb-2 border-b border-amber-200 pb-2">4. TURBO-LADDA (SKAPA MED AI)</h3>
                    <p className="text-xs text-amber-800 mb-4">
                      Skapa frågor nu så din son slipper vänta! Använder <strong>AI-motorn (Nyckel i steg 1)</strong>.
                    </p>

@@ -186,12 +186,12 @@ const FALLBACK_QUESTIONS: Omit<Question, 'id'>[] = [
   },
   {
     type: 'MULTIPLE_CHOICE',
-    text: "VAD BEHÖVER VÄXTER FÖR ATT LEVA?",
-    options: ["GODIS", "VATTEN", "BENSIN", "MJÖLK"],
+    text: "VAD ANVÄNDER EN FÅGEL FÖR ATT FLYGA?",
+    options: ["FENOR", "VINGAR", "HJUL", "ÖRON"],
     correctAnswerIndex: 1,
-    explanation: "VÄXTER DRICKER VATTEN OCH BEHÖVER SOLLJUS.",
-    difficultyLevel: 2,
-    visualSubject: "A watering can watering a flower"
+    explanation: "FÅGLAR VIFTAR MED VINGARNA FÖR ATT FLYGA.",
+    difficultyLevel: 1,
+    visualSubject: "A bird flying"
   },
   {
     type: 'MULTIPLE_CHOICE',
@@ -204,12 +204,12 @@ const FALLBACK_QUESTIONS: Omit<Question, 'id'>[] = [
   },
   {
     type: 'MULTIPLE_CHOICE',
-    text: "VAD ANVÄNDER TÅGET FÖR ATT RULLA?",
-    options: ["FÖTTER", "HJUL", "VINGAR", "FENOR"],
+    text: "VILKET DJUR SÄGER MJAU?",
+    options: ["HUND", "KATT", "KO", "GRIS"],
     correctAnswerIndex: 1,
-    explanation: "TÅGET HAR HJUL AV METALL SOM RULLAR PÅ RÄLSEN.",
+    explanation: "KATTEN SÄGER MJAU.",
     difficultyLevel: 1,
-    visualSubject: "Train wheels close up"
+    visualSubject: "A cute cat"
   },
   {
     type: 'MULTIPLE_CHOICE',
@@ -241,46 +241,57 @@ const questionSchema: Schema = {
   required: ["questionText", "options", "correctAnswerIndex", "explanation"],
 };
 
+// Expanded topics to avoid repetition of "Heart", "Ice", "Plants", "Wheels"
+// UPDATED: Removed visual counting prompts to prevent "How many X do you see?" questions without matching images.
 const SUB_TOPICS: Record<Subject, string[]> = {
   [Subject.MATH]: [
-    "RÄKNA FRUKTER ELLER DJUR (Inte tåg)",
+    "RÄKNA ANTAL (Textbaserat: 'Lisa har 2 äpplen och får 3 till...')",
     "ENKEL ADDITION (Plus)",
     "ENKEL SUBTRAKTION (Minus)",
-    "KLOCKAN OCH TID (Hel och halvtimme)",
-    "PENGAR OCH HANDLA",
-    "GEOMETRISKA FORMER",
-    "MÖNSTER I TALSERIER (Vad kommer sen? 2, 4, 6...)",
+    "KLOCKAN OCH TID",
+    "PENGAR OCH HANDLA I AFFÄR",
+    "GEOMETRISKA FORMER (2D och 3D)",
+    "MÖNSTER I TALSERIER (2, 4, 6...)",
     "DUBBELT OCH HÄLFTEN",
-    "STORLEKSORDNING (Minst till störst)"
+    "STORLEKSORDNING (Minst till störst)",
+    "MATEMATIK I SPORT (Mål, poäng)",
+    "MÄTA SAKER (Längd, vikt)"
   ],
   [Subject.LANGUAGE]: [
-    "RIM OCH RAMSOR (Perfekta rim)",
-    "MOTSATSORD (Stor/Liten, Varm/Kall)",
-    "SYNONYMER (Ord som betyder samma sak)",
-    "SAMMANSATTA ORD (T.ex Sol + Glasögon)",
+    "RIM OCH RAMSOR",
+    "MOTSATSORD",
+    "SYNONYMER",
+    "SAMMANSATTA ORD",
     "VILKEN BOKSTAV BÖRJAR ORDET PÅ?",
-    "STAVNING (Vilket ord är rättstavat?)",
-    "LISTA UT ORDET (Jag har fyra ben och skäller...)",
-    "ORDKUNSKAP (Vad är en...)"
+    "STAVNING",
+    "LISTA UT ORDET (Gåtor)",
+    "ORDKUNSKAP (Vad är en...)",
+    "ADJEKTIV (Beskrivande ord)",
+    "VERB (Vad gör man?)"
   ],
   [Subject.LOGIC]: [
-    "VAD SKA BORT? (Vilken sak hör inte hit?)",
-    "FORMMÖNSTER (Vad kommer härnäst?)",
-    "ORSAK OCH VERKAN (Vad händer om...?)",
-    "SORTERING (Vilka saker hör ihop?)",
-    "SPATIAL FÖRMÅGA (Vrida och vända på former mentalt)",
-    "GÅTOR OCH KLURINGAR"
+    "VAD SKA BORT? (Udda fågel - textbaserat)",
+    "FORMMÖNSTER (Vad kommer sen?)",
+    "ORSAK OCH VERKAN",
+    "SORTERING (Kategorier)",
+    "SPATIAL FÖRMÅGA (Pusselbitar)",
+    "GÅTOR OCH KLURINGAR",
+    "PROGRAMMERINGSTÄNK (Steg för steg)",
+    "LABYRINTER (Höger/Vänster)"
   ],
   [Subject.PHYSICS]: [
-    "RYMDEN (Planeter, stjärnor, månen)",
-    "DJUR (Vad äter de? Var bor de? Däggdjur/Fåglar)",
-    "KROPPEN (Hjärtat, tänder, sinnen, skelett)",
-    "VATTEN OCH LUFT (Flyta/sjunka, is/ånga)",
-    "TEKNIK I VARDAGEN (Verktyg, enkla maskiner, hjulet)",
-    "MATERIAL (Hårt, mjukt, magnetiskt, trä/metall)",
-    "VÄDER OCH ÅRSTIDER",
-    "DINOSAURIER OCH FORNTID",
-    "VÄXTER OCH TRÄD"
+    "RYMDEN OCH PLANETER (Inte bara solen)",
+    "DJUR I HAVET",
+    "INSEKTER OCH SMÅKRYP",
+    "SKELETTET OCH MUSKLER (Inte hjärta/blod)",
+    "ELEKTRICITET OCH LAMPOR",
+    "MAGNETISM",
+    "VÄDER (Regn, Åska, Moln)",
+    "DINOSAURIER",
+    "MATERIAL (Trä, Metall, Plast)",
+    "VERKTYG OCH BYGGANDE",
+    "MUSIKINSTRUMENT (Ljudvågor)",
+    "FORSKNING OCH UPPFINNINGAR"
   ]
 };
 
@@ -311,7 +322,6 @@ const generateDragDropQuestion = (difficulty: number): Question => {
   return {
     id: crypto.randomUUID(),
     type: 'DRAG_AND_DROP',
-    // Simplified instruction as requested: "Lasta på 2 st timmerstockar" instead of "Lastkajen: Lasta..."
     text: `${selectedItem.verb} ${targetCount} ST ${selectedItem.name}.`,
     explanation: `BRA JOBBAT! NU ÄR DET KLART.`,
     difficultyLevel: difficulty,
@@ -328,7 +338,6 @@ const generateDragDropQuestion = (difficulty: number): Question => {
 
 export const testApiKey = async (): Promise<{ success: boolean; message?: string }> => {
   try {
-    // Minimal request to check auth and project validity
     if (!apiKey) {
       return { success: false, message: "Ingen nyckel laddad." };
     }
@@ -340,12 +349,10 @@ export const testApiKey = async (): Promise<{ success: boolean; message?: string
     return { success: true };
   } catch (error: any) {
     console.warn("API Key Test Failed:", error);
-    
     const msg = error.message || String(error);
     if (msg.includes('expired') || msg.includes('API_KEY_INVALID')) {
         return { success: false, message: "Din API-nyckel har gått ut eller är felaktig." };
     }
-
     return { success: false, message: error.message || "Okänt fel vid anslutning" };
   }
 };
@@ -398,7 +405,7 @@ export const playTextAsSpeech = async (text: string): Promise<void> => {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Puck' }, // Puck has a friendly, slightly higher pitch suitable for kids apps
+            prebuiltVoiceConfig: { voiceName: 'Puck' }, 
           },
         },
       },
@@ -428,24 +435,20 @@ export const playTextAsSpeech = async (text: string): Promise<void> => {
 export const generateRewardImage = async (prompt: string): Promise<string | null> => {
   if (!prompt) return null;
 
-  // 1. Check In-Memory Cache
   if (imageCache.has(prompt)) {
     const cached = imageCache.get(prompt);
     if (cached === 'BLOCKED') return null;
     return cached || null;
   }
 
-  // 2. Check Persistent DB
   try {
     const dbImage = await trainDb.getImage(prompt);
     
     if (dbImage) {
-      // If explicitly blocked, respect it and return null
       if (dbImage === 'BLOCKED') {
          imageCache.set(prompt, 'BLOCKED');
          return null;
       }
-
       imageCache.set(prompt, dbImage);
       return dbImage;
     }
@@ -453,7 +456,6 @@ export const generateRewardImage = async (prompt: string): Promise<string | null
     console.warn("DB Image read failed", e);
   }
 
-  // 3. Generate from AI
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
@@ -472,11 +474,8 @@ export const generateRewardImage = async (prompt: string): Promise<string | null
     const part = response.candidates?.[0]?.content?.parts?.[0];
     if (part && part.inlineData && part.inlineData.data) {
          const base64String = `data:image/png;base64,${part.inlineData.data}`;
-         
-         // Save to both caches
          imageCache.set(prompt, base64String);
          trainDb.saveImage(prompt, base64String).catch(e => console.warn("Failed to save image to DB", e));
-         
          return base64String;
     }
     return null;
@@ -487,10 +486,8 @@ export const generateRewardImage = async (prompt: string): Promise<string | null
 };
 
 export const removeBadImage = async (prompt: string): Promise<void> => {
-  // Update memory cache
   imageCache.delete(prompt);
   imageCache.set(prompt, "BLOCKED"); 
-  // Update persistent DB to block future generation
   await trainDb.blockImage(prompt);
 };
 
@@ -499,7 +496,8 @@ const fetchFromAIAndSave = async (
   difficulty: number, 
   useDigits: boolean, 
   currentCarCount: number, 
-  specificFocus: string
+  specificFocus: string,
+  bannedTopics: string[]
 ): Promise<Question> => {
   
   const levelContext = difficulty === 1 
@@ -507,23 +505,29 @@ const fetchFromAIAndSave = async (
     : `NIVÅ: ${difficulty} (1=Enkelt, 5=Svårt).`;
 
   const numberFormattingRule = useDigits 
-    ? "ANVÄND SIFFROR (1, 2, 3) ISTÄLLET FÖR BOKSTÄVER FÖR ALLA TAL. (Skriv inte 'TVÅ', skriv '2')."
-    : "ANVÄND BOKSTÄVER (ETT, TVÅ, TRE) FÖR ENKLA TAL OM DET PASSAR SPRÅKLIGT.";
+    ? "ANVÄND SIFFROR (1, 2, 3) ISTÄLLET FÖR BOKSTÄVER FÖR ALLA TAL."
+    : "ANVÄND BOKSTÄVER (ETT, TVÅ, TRE) FÖR ENKLA TAL.";
 
   let promptContext = "";
   switch (subject) {
     case Subject.MATH:
-      promptContext = `Matematik. FOKUSERA PÅ: ${specificFocus}. VIKTIGT: VARIERA TEMAT. Det behöver INTE vara tåg. Använd gärna djur, mat, superhjältar, rymden.`;
+      promptContext = `Matematik. FOKUS: ${specificFocus}. VIKTIGT: VARIERA TEMAT (Sport, Mat, Djur, Rymden).`;
       break;
     case Subject.LANGUAGE:
-      promptContext = `Svenska språket. FOKUSERA PÅ: ${specificFocus}.`;
+      promptContext = `Svenska språket. FOKUS: ${specificFocus}. VIKTIGT: VARIERA TEMAT.`;
       break;
     case Subject.LOGIC:
-      promptContext = `Logik. FOKUSERA PÅ: ${specificFocus}.`;
+      promptContext = `Logik. FOKUS: ${specificFocus}. VIKTIGT: VARIERA TEMAT.`;
       break;
     case Subject.PHYSICS:
-      promptContext = `Natur och Teknik. FOKUSERA PÅ: ${specificFocus}.`;
+      promptContext = `Natur och Teknik. FOKUS: ${specificFocus}. VIKTIGT: VARIERA TEMAT.`;
       break;
+  }
+
+  // Construct Ban List String
+  let banInstruction = "";
+  if (bannedTopics && bannedTopics.length > 0) {
+      banInstruction = `- UNDVIK DESSA ÄMNEN HELT (De förekommer för ofta): ${bannedTopics.join(', ')}.`;
   }
 
   const prompt = `
@@ -534,7 +538,12 @@ const fetchFromAIAndSave = async (
     3. FOKUS: ${specificFocus}.
     4. SPRÅK: Svenska, VERSALER.
     5. ${numberFormattingRule}
-    6. FRÅGA INTE OM DETTA SPEL ELLER HUR MÅNGA VAGNAR TÅGET HAR. FRÅGA OM MATEMATIK, LOGIK ELLER SPRÅK I ALLMÄNHET.
+    6. REGLER FÖR VARIATION:
+       ${banInstruction}
+       - Fråga ALDRIG hur många vagnar tåget har.
+       - Fråga ALDRIG frågor som "Hur många X ser du på bilden?".
+       - Frågorna SKA kunna besvaras med bara texten/logiken. Bilden är bara dekoration.
+       - Var kreativ! Använd oväntade teman som robotar, djuphavet, djungeln, instrument, sport.
     
     JSON format required.
     VisualSubject: English description for an image if concrete object, else null.
@@ -547,7 +556,7 @@ const fetchFromAIAndSave = async (
     config: {
       responseMimeType: "application/json",
       responseSchema: questionSchema,
-      temperature: 0.9, // Increased temperature for more variety
+      temperature: 1.1, // High temperature for maximum variety
     },
   });
 
@@ -567,7 +576,6 @@ const fetchFromAIAndSave = async (
     visualSubject: data.visualSubject
   };
 
-  // Save to DB for future use
   trainDb.saveQuestion(newQuestion, subject).catch(e => console.error("Save to DB failed", e));
 
   return newQuestion;
@@ -578,13 +586,13 @@ export const markQuestionTooHard = async (question: Question): Promise<void> => 
   await trainDb.updateQuestionDifficulty(question.id, newDifficulty);
 };
 
-// Helper delay to avoid rate limits
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 export const batchGenerateQuestions = async (
   count: number, 
   useDigits: boolean, 
   difficulties: Record<Subject, number>,
+  bannedTopics: string[],
   onProgress: (completed: number) => void,
   onError?: (errorMsg: string) => void
 ): Promise<void> => {
@@ -592,49 +600,34 @@ export const batchGenerateQuestions = async (
   
   for (let i = 0; i < count; i++) {
     try {
-      // Add a larger delay (5s) to be safe with Free Tier (approx 15 requests/min)
-      // 5000ms + execution time ensures we stay under limit
       if (i > 0) await delay(5000);
 
-      // Rotate through subjects
       const subject = subjects[i % subjects.length];
       const difficulty = difficulties[subject];
       const subTopics = SUB_TOPICS[subject];
       const specificFocus = subTopics[Math.floor(Math.random() * subTopics.length)];
       
-      // We generate but don't need the return value, it saves to DB internally
-      await fetchFromAIAndSave(subject, difficulty, useDigits, 5, specificFocus);
-      
+      await fetchFromAIAndSave(subject, difficulty, useDigits, 5, specificFocus, bannedTopics);
       onProgress(i + 1);
     } catch (error: any) {
       console.error("Batch generation error at index " + i, error);
-      
       const msg = error.message || String(error);
       
-      // Identify quota issues
       if (msg.includes('429') || msg.includes('quota')) {
          if (onError) onError(`Kvot överskriden (429). Vänta en stund. Detaljer: ${msg}`);
-         break; // Stop batch
-      }
-      
-      // Identify specific API Key issues (Expired / Invalid)
-      if (msg.includes('expired') || msg.includes('API_KEY_INVALID') || msg.includes('API key not valid')) {
-         if (onError) onError(`DIN API-NYCKEL HAR GÅTT UT. Du måste skapa en ny nyckel hos Google AI Studio och uppdatera den i dina 'Environment Variables' där du kör appen.`);
-         break;
-      }
-      
-      if (msg.includes('API key') || msg.includes('403')) {
-         if (onError) onError(`Nyckelfel: Kontrollera att din GOOGLE_AI_API_KEY i .env är giltig.`);
          break; 
       }
       
-      // If just a random glitch, report but continue if possible, or break if critical
+      if (msg.includes('expired') || msg.includes('API_KEY_INVALID')) {
+         if (onError) onError(`DIN API-NYCKEL HAR GÅTT UT.`);
+         break;
+      }
+      
       if (onError) onError(`Fel vid fråga ${i+1}: ${msg.substring(0, 80)}...`);
     }
   }
 };
 
-// Batch Image Generation
 export const batchGenerateImages = async (
   prompts: string[],
   onProgress: (completed: number) => void,
@@ -642,9 +635,7 @@ export const batchGenerateImages = async (
 ): Promise<void> => {
   for (let i = 0; i < prompts.length; i++) {
       try {
-          // 5 second delay between generations to be safe with API limits
           if (i > 0) await delay(5000);
-          
           const prompt = prompts[i];
           await generateRewardImage(prompt);
           onProgress(i + 1);
@@ -660,24 +651,17 @@ export const generateQuestion = async (
   difficulty: number, 
   useDigits: boolean, 
   currentCarCount: number, 
-  previousType?: QuestionType
+  previousType?: QuestionType,
+  bannedTopics: string[] = []
 ): Promise<Question> => {
   
-  // 1. Drag Drop Logic (unchanged)
   const canTriggerDragDrop = subject === Subject.MATH && difficulty <= 2 && previousType !== 'DRAG_AND_DROP';
   if (canTriggerDragDrop && Math.random() < 0.3) {
     return generateDragDropQuestion(difficulty);
   }
 
-  // 2. STRATEGY SELECTION (DB vs AI)
   try {
     const dbCount = await trainDb.getQuestionCount(subject);
-    
-    // Dynamic Probability Strategy based on DB size
-    // < 50:   100% New (Build phase)
-    // 50-99:  20% New (1 in 5)
-    // 100-199: 10% New (1 in 10)
-    // >= 200:  5% New (1 in 20)
     
     let aiProbability = 0;
     if (dbCount < 50) {
@@ -690,40 +674,33 @@ export const generateQuestion = async (
       aiProbability = 0.05;
     }
 
-    const rollDice = Math.random(); // 0.0 to 1.0
+    const rollDice = Math.random(); 
     const forceAI = rollDice < aiProbability;
 
-    // Try fetching from DB if we are NOT forced to use AI
     if (!forceAI) {
       const dbQuestion = await trainDb.getRandomQuestion(subject);
       if (dbQuestion) {
-        // Important: We generate a new UUID even for cached questions so React keys update
         return { ...dbQuestion, id: crypto.randomUUID() };
       }
     }
 
-    // 3. AI GENERATION
     const subTopics = SUB_TOPICS[subject];
     const specificFocus = subTopics[Math.floor(Math.random() * subTopics.length)];
     
-    return await fetchFromAIAndSave(subject, difficulty, useDigits, currentCarCount, specificFocus);
+    return await fetchFromAIAndSave(subject, difficulty, useDigits, currentCarCount, specificFocus, bannedTopics);
 
   } catch (error) {
     console.error("Error in generateQuestion:", error);
     
-    // 4. ROBUST FALLBACK
-    // If AI failed (e.g. 429 Quota), TRY DB AGAIN even if we wanted AI.
     try {
       const rescueQuestion = await trainDb.getRandomQuestion(subject);
       if (rescueQuestion) {
-        console.log("AI failed, rescued by DB cache.");
         return { ...rescueQuestion, id: crypto.randomUUID() };
       }
     } catch (dbError) {
       console.warn("DB rescue failed", dbError);
     }
 
-    // 5. ULTIMATE FALLBACK (Hardcoded)
     const fallbackBase = FALLBACK_QUESTIONS[Math.floor(Math.random() * FALLBACK_QUESTIONS.length)];
     return {
       ...fallbackBase,

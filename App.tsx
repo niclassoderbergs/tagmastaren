@@ -42,7 +42,16 @@ const DEFAULT_SETTINGS: AppSettings = {
     [Subject.LANGUAGE]: 2,
     [Subject.LOGIC]: 2,
     [Subject.PHYSICS]: 2
-  }
+  },
+  enableBannedTopics: true,
+  bannedTopics: [
+    "Hjulet", 
+    "Is/Vatten", 
+    "Vad växter behöver", 
+    "Hjärtat/Blod", 
+    "Solen",
+    "Fotosyntes"
+  ]
 };
 
 const INITIAL_GAME_STATE: GameState = {
@@ -91,7 +100,14 @@ export default function App() {
     const saved = localStorage.getItem('trainMasterSettings');
     if (saved) {
       const parsed = JSON.parse(saved);
-      return { ...DEFAULT_SETTINGS, ...parsed, subjectDifficulty: { ...DEFAULT_SETTINGS.subjectDifficulty, ...parsed.subjectDifficulty } };
+      return { 
+        ...DEFAULT_SETTINGS, 
+        ...parsed, 
+        subjectDifficulty: { ...DEFAULT_SETTINGS.subjectDifficulty, ...parsed.subjectDifficulty },
+        // Ensure new fields exist if loading old settings
+        bannedTopics: parsed.bannedTopics || DEFAULT_SETTINGS.bannedTopics,
+        enableBannedTopics: parsed.enableBannedTopics ?? DEFAULT_SETTINGS.enableBannedTopics
+      };
     }
     return DEFAULT_SETTINGS;
   });
@@ -160,7 +176,10 @@ export default function App() {
       const difficulty = settings.subjectDifficulty[subject];
       const carCount = gameState.cars.length;
       
-      const question = await generateQuestion(subject, difficulty, settings.useDigits, carCount, previousType);
+      // Pass settings.bannedTopics if enabled
+      const banList = settings.enableBannedTopics ? settings.bannedTopics : [];
+
+      const question = await generateQuestion(subject, difficulty, settings.useDigits, carCount, previousType, banList);
       
       // Add to buffer immediately (without image)
       setQuestionBuffer(prev => [...prev, question]);
@@ -251,8 +270,9 @@ export default function App() {
       setLoading(true);
       const difficulty = settings.subjectDifficulty[subject];
       const carCount = gameState.cars.length;
+      const banList = settings.enableBannedTopics ? settings.bannedTopics : [];
       
-      generateQuestion(subject, difficulty, settings.useDigits, carCount, currentQuestion?.type).then(q => {
+      generateQuestion(subject, difficulty, settings.useDigits, carCount, currentQuestion?.type, banList).then(q => {
         setCurrentQuestion(q);
         setLoading(false);
         ensureBufferFilled(subject);
@@ -273,22 +293,19 @@ export default function App() {
     // Fetch the FIRST question directly 
     const difficulty = settings.subjectDifficulty[subject];
     const carCount = gameState.cars.length;
-    const firstQuestion = await generateQuestion(subject, difficulty, settings.useDigits, carCount);
+    const banList = settings.enableBannedTopics ? settings.bannedTopics : [];
     
-    setCurrentQuestion(firstQuestion);
+    const firstQuestion = await generateQuestion(subject, difficulty, settings.useDigits, carCount, undefined, banList);
+    
+    // USER REQUEST: Never show image for the first question to speed up start.
+    // We strip the visualSubject from the first question so the app doesn't try to load it.
+    const fastStartQuestion = { ...firstQuestion, visualSubject: undefined };
+
+    setCurrentQuestion(fastStartQuestion);
     setLoading(false);
 
-    // Start image gen for the first question immediately
-    if (firstQuestion.visualSubject) {
-      generateRewardImage(firstQuestion.visualSubject).then(url => {
-        if (url) {
-           setPreloadedRewardImage(url);
-           setCurrentQuestion(prev => prev ? { ...prev, preloadedImageUrl: url } : prev);
-        }
-      });
-    }
-    
-    // The buffer useEffect will kick in automatically since selectedSubject is set
+    // NOTE: We do NOT call generateRewardImage here for the first question.
+    // The buffer will automatically start filling up for question 2, 3, 4...
   };
 
   const handleAnswer = (index: number) => {

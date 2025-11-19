@@ -53,13 +53,17 @@ export const DragDropChallenge: React.FC<DragDropChallengeProps> = ({ config, on
   const targetBorderClass = isBistro ? 'border-amber-200' : 'border-red-200';
   const targetTextClass = isBistro ? 'text-amber-900' : 'text-red-900';
 
+  // Fallback for legacy configs if sourceName/verb missing
+  const displaySource = config.sourceName || 'LASTKAJEN';
+  const displayVerb = config.verb || 'LASTA PÅ';
+
   return (
     <div className="w-full flex flex-col gap-6 select-none uppercase">
       {/* Instructional Status */}
       <div className="bg-blue-50 p-4 rounded-2xl border-2 border-blue-200 text-center flex flex-col items-center justify-center">
         <p className="text-sm font-bold text-blue-800 mb-1 tracking-wider">DITT UPPDRAG</p>
         <div className="flex items-center gap-3 bg-white px-6 py-2 rounded-full shadow-sm border border-blue-100">
-          <span className="text-xl font-bold text-slate-600">{config.verb || 'LASTA PÅ'}:</span>
+          <span className="text-xl font-bold text-slate-600">{displayVerb}:</span>
           <span className="text-4xl font-black text-blue-600">{config.targetCount}</span>
           <span className="text-3xl">{config.itemEmoji}</span>
         </div>
@@ -70,7 +74,7 @@ export const DragDropChallenge: React.FC<DragDropChallengeProps> = ({ config, on
         {/* SOURCE AREA (Platform/Kitchen) */}
         <div className="flex-1 bg-slate-200 rounded-xl p-4 border-b-8 border-slate-300 flex flex-wrap content-start gap-2 min-h-[150px]">
           <div className="w-full text-center text-slate-500 font-bold text-sm mb-2 border-b border-slate-300 pb-1">
-            {config.sourceName || 'LASTKAJEN'}
+            {displaySource}
           </div>
           {items.filter(i => !i.isLoaded).map(item => (
             <button

@@ -56,4 +56,6 @@ export interface AppSettings {
   useDigits: boolean; // New setting for number formatting
   subjectDifficulty: Record<Subject, number>;
   firebaseConfig?: FirebaseConfig; // For cloud sync
+  enableBannedTopics: boolean; // Toggle for the ban list
+  bannedTopics: string[]; // List of topics to exclude from AI generation
 }
