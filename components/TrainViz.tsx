@@ -3,6 +3,7 @@ import { TrainCar } from '../types';
 
 interface TrainVizProps {
   cars: TrainCar[];
+  compact?: boolean; // New prop to trigger smaller layout
 }
 
 // SVG Components for different car types
@@ -63,7 +64,7 @@ const TankerCar = ({ color }: { color: string }) => (
   </g>
 );
 
-export const TrainViz: React.FC<TrainVizProps> = ({ cars }) => {
+export const TrainViz: React.FC<TrainVizProps> = ({ cars, compact = false }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to the right when a new car is added
@@ -74,21 +75,27 @@ export const TrainViz: React.FC<TrainVizProps> = ({ cars }) => {
   }, [cars.length]);
 
   return (
-    <div className="w-full bg-slate-800 border-t-2 md:border-t-4 border-b-2 md:border-b-4 border-slate-600 relative h-24 md:h-48 flex items-center overflow-hidden transition-all">
+    <div className={`w-full bg-slate-800 border-t-2 md:border-t-4 border-b-2 md:border-b-4 border-slate-600 relative flex items-center overflow-hidden transition-all duration-300 ${compact ? 'h-14' : 'h-24'} md:h-48`}>
       {/* Background Scenery (Static for simplicity, but implies motion) */}
       <div className="absolute top-2 md:top-4 left-10 w-8 h-8 md:w-16 md:h-16 bg-yellow-100 rounded-full opacity-20 blur-xl"></div>
       
       <div 
         ref={scrollRef}
-        className="flex items-end pb-1 md:pb-4 px-4 md:px-10 space-x-1 overflow-x-auto scroll-smooth w-full h-full no-scrollbar"
+        className={`flex items-end px-4 md:px-10 space-x-1 overflow-x-auto scroll-smooth w-full h-full no-scrollbar ${compact ? 'pb-1' : 'pb-1 md:pb-4'}`}
         style={{ scrollBehavior: 'smooth' }}
       >
         {/* Tracks */}
-        <div className="absolute bottom-2 md:bottom-4 left-0 w-[2000px] h-1 md:h-2 bg-stone-400 z-0"></div>
+        <div className={`absolute left-0 w-[2000px] bg-stone-400 z-0 ${compact ? 'h-1 bottom-1' : 'h-1 md:h-2 bottom-2 md:bottom-4'}`}></div>
 
         {/* Render Cars */}
         {cars.map((car, index) => (
-          <svg key={car.id} width="80" height="80" viewBox="0 0 80 70" className="flex-shrink-0 z-10 scale-90 md:scale-100 origin-bottom">
+          <svg 
+             key={car.id} 
+             width="80" 
+             height="80" 
+             viewBox="0 0 80 70" 
+             className={`flex-shrink-0 z-10 origin-bottom transition-transform duration-300 ${compact ? 'scale-75' : 'scale-90'} md:scale-100`}
+          >
             {car.type === 'LOCOMOTIVE' && <Locomotive />}
             {car.type === 'PASSENGER' && <PassengerCar color={car.color} />}
             {car.type === 'CARGO' && <CargoCar color={car.color} />}

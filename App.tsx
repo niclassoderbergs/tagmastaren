@@ -59,20 +59,20 @@ const INITIAL_GAME_STATE: GameState = {
   currentStreak: 0,
 };
 
-const MissionProgress = ({ current, target }: { current: number, target: number }) => (
-  <div className="flex items-center gap-2 mb-4 justify-center bg-blue-50 py-3 px-6 rounded-full border border-blue-100 mx-auto w-fit">
-    <span className="text-blue-800 font-bold mr-2 text-sm">UPPDRAG:</span>
+const MissionProgress = ({ current, target, compact }: { current: number, target: number, compact: boolean }) => (
+  <div className={`flex items-center gap-2 justify-center bg-blue-50 rounded-full border border-blue-100 mx-auto w-fit transition-all ${compact ? 'py-1 px-3 mb-2' : 'py-3 px-6 mb-4'}`}>
+    <span className={`text-blue-800 font-bold mr-2 ${compact ? 'text-xs' : 'text-sm'}`}>UPPDRAG:</span>
     <div className="flex gap-2">
       {Array.from({ length: target }).map((_, i) => (
         <div 
           key={i}
-          className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-500 ${
+          className={`rounded-full flex items-center justify-center border-2 transition-all duration-500 ${
             i < current 
               ? 'bg-yellow-400 border-yellow-500 scale-110 shadow-md' 
               : 'bg-white border-slate-300'
-          }`}
+          } ${compact ? 'w-6 h-6' : 'w-8 h-8'}`}
         >
-          {i < current && <span className="text-yellow-900 text-lg">★</span>}
+          {i < current && <span className={`text-yellow-900 ${compact ? 'text-sm' : 'text-lg'}`}>★</span>}
         </div>
       ))}
     </div>
@@ -142,6 +142,9 @@ export default function App() {
   const rewardSectionRef = useRef<HTMLDivElement>(null);
   const questionCardRef = useRef<HTMLDivElement>(null);
   const questionTopRef = useRef<HTMLDivElement>(null);
+
+  // Determine if we are in active gameplay to condense the UI
+  const isMissionActive = !!selectedSubject;
 
   // Persist Settings
   useEffect(() => {
@@ -493,42 +496,54 @@ export default function App() {
   return (
     <Layout settings={settings} setSettings={setSettings} showSettings={showSettings} setShowSettings={setShowSettings}>
       
-      <header className="bg-blue-600 p-4 shadow-lg sticky top-0 z-50">
-        <div className="max-w-4xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setSelectedSubject(null)} className="text-white text-2xl hover:scale-110 transition-transform">
-              🚂
-            </button>
-            <div>
-               <h1 className="text-white font-black text-xl tracking-wider drop-shadow-md">TÅGMÄSTAREN</h1>
-               <div className="flex gap-2 text-blue-100 text-xs font-bold">
-                 <span>VAGNAR: {gameState.cars.length}</span>
-                 <span>|</span>
-                 <span>POÄNG: {gameState.score}</span>
-               </div>
+      {/* STICKY HEADER & MOBILE TRAIN GROUP */}
+      <div className="sticky top-0 z-50 w-full shadow-lg">
+        
+        {/* Header */}
+        <header className={`bg-blue-600 transition-all duration-300 ${isMissionActive ? 'py-1 px-2' : 'p-4'}`}>
+          <div className="max-w-4xl mx-auto flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <button onClick={() => setSelectedSubject(null)} className="text-white text-2xl hover:scale-110 transition-transform">
+                🚂
+              </button>
+              <div>
+                 <h1 className={`text-white font-black tracking-wider drop-shadow-md transition-all ${isMissionActive ? 'text-lg' : 'text-xl'}`}>
+                   TÅGMÄSTAREN
+                 </h1>
+                 <div className={`flex gap-2 text-blue-100 font-bold transition-all ${isMissionActive ? 'text-[10px]' : 'text-xs'}`}>
+                   <span>VAGNAR: {gameState.cars.length}</span>
+                   {!isMissionActive && (
+                     <>
+                       <span>|</span>
+                       <span>POÄNG: {gameState.score}</span>
+                     </>
+                   )}
+                 </div>
+              </div>
+            </div>
+            <div className="flex gap-3">
+               <button onClick={() => setShowHelp(true)} className={`bg-blue-500 rounded-full hover:bg-blue-400 transition-colors ${isMissionActive ? 'p-1' : 'p-2'}`} title="Hjälp">
+                 🛟
+               </button>
+               <button onClick={() => setShowSettings(true)} className={`bg-blue-500 rounded-full hover:bg-blue-400 transition-colors ${isMissionActive ? 'p-1' : 'p-2'}`} title="Inställningar">
+                 ⚙️
+               </button>
             </div>
           </div>
-          <div className="flex gap-3">
-             <button onClick={() => setShowHelp(true)} className="bg-blue-500 p-2 rounded-full hover:bg-blue-400 transition-colors" title="Hjälp">
-               🛟
-             </button>
-             <button onClick={() => setShowSettings(true)} className="bg-blue-500 p-2 rounded-full hover:bg-blue-400 transition-colors" title="Inställningar">
-               ⚙️
-             </button>
-          </div>
+        </header>
+
+        {/* Mobile Train (Attached to header) */}
+        <div className="md:hidden pointer-events-none bg-slate-800">
+            <div className="pointer-events-auto">
+                <TrainViz cars={gameState.cars} compact={isMissionActive} />
+            </div>
         </div>
-      </header>
+
+      </div>
 
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
 
-      {/* MOBILE TRAIN (Top) - Sticky just below header */}
-      <div className="md:hidden sticky top-[72px] z-40 shadow-lg pointer-events-none">
-          <div className="pointer-events-auto">
-              <TrainViz cars={gameState.cars} />
-          </div>
-      </div>
-
-      <main className="flex-1 p-4 max-w-3xl mx-auto w-full pb-32">
+      <main className={`flex-1 max-w-3xl mx-auto w-full pb-32 ${isMissionActive ? 'p-2 pt-4' : 'p-4'}`}>
         
         {!selectedSubject ? (
           // --- MENU SELECTION ---
@@ -570,9 +585,9 @@ export default function App() {
         ) : (
           // --- GAME VIEW ---
           <div className="animate-slide-up relative">
-            <MissionProgress current={missionProgress} target={MISSION_TARGET} />
+            <MissionProgress current={missionProgress} target={MISSION_TARGET} compact={isMissionActive} />
             
-            <div className="mb-6" onClick={handleSpeakQuestion}>
+            <div className={`mb-2 md:mb-6`} onClick={handleSpeakQuestion}>
                <Conductor 
                  message={showExplanation ? currentQuestion?.explanation || "BRA JOBBAT!" : (currentQuestion?.text || "LADDAR...")} 
                  mood={showExplanation ? 'happy' : 'thinking'} 
@@ -585,19 +600,19 @@ export default function App() {
                 <p className="sr-only">Laddar...</p>
               </div>
             ) : (
-              <div ref={questionCardRef} className="space-y-6">
+              <div ref={questionCardRef} className="space-y-4 md:space-y-6">
                  
                  <div ref={questionTopRef}></div>
 
                  {currentQuestion.type === 'DRAG_AND_DROP' && currentQuestion.dragDropConfig ? (
-                    <div className="bg-white p-4 rounded-3xl shadow-xl border-4 border-blue-100">
+                    <div className="bg-white p-2 md:p-4 rounded-3xl shadow-xl border-4 border-blue-100">
                        <DragDropChallenge 
                          config={currentQuestion.dragDropConfig} 
                          onComplete={handleDragDropComplete}
                        />
                     </div>
                  ) : (
-                    <div className="grid grid-cols-1 gap-4">
+                    <div className="grid grid-cols-1 gap-3 md:gap-4">
                       {currentQuestion.options?.map((option, index) => {
                         // Determine style based on selection state
                         let btnClass = "bg-white hover:bg-blue-50 border-slate-200 text-slate-700"; // Default
@@ -623,10 +638,10 @@ export default function App() {
                             onClick={() => !showExplanation && handleAnswer(index)}
                             disabled={showExplanation}
                             className={`
-                              p-6 rounded-2xl border-b-8 text-2xl font-bold transition-all duration-200
-                              flex items-center justify-center text-center min-h-[100px]
+                              p-3 md:p-6 rounded-xl md:rounded-2xl border-b-4 md:border-b-8 text-lg md:text-2xl font-bold transition-all duration-200
+                              flex items-center justify-center text-center min-h-[60px] md:min-h-[100px]
                               ${btnClass}
-                              ${!showExplanation ? 'active:border-b-0 active:translate-y-2 shadow-sm' : ''}
+                              ${!showExplanation ? 'active:border-b-0 active:translate-y-1 md:active:translate-y-2 shadow-sm' : ''}
                             `}
                           >
                             {option}
@@ -638,9 +653,9 @@ export default function App() {
 
                  {/* FEEDBACK & NEXT BUTTON */}
                  {(feedback.msg || showExplanation) && (
-                   <div className="animate-bounce-in space-y-6">
+                   <div className="animate-bounce-in space-y-4 md:space-y-6">
                       
-                      <div className={`p-4 rounded-xl text-center font-black text-xl ${
+                      <div className={`p-3 md:p-4 rounded-xl text-center font-black text-lg md:text-xl ${
                         feedback.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
                       }`}>
                         {feedback.msg}
@@ -673,7 +688,7 @@ export default function App() {
                       {feedback.type === 'success' && (
                         <button 
                           onClick={handleNext}
-                          className="w-full bg-blue-600 hover:bg-blue-500 text-white text-3xl font-black py-6 rounded-3xl shadow-xl border-b-8 border-blue-800 active:border-b-0 active:translate-y-2 transition-all uppercase flex items-center justify-center gap-4"
+                          className="w-full bg-blue-600 hover:bg-blue-500 text-white text-2xl md:text-3xl font-black py-4 md:py-6 rounded-3xl shadow-xl border-b-4 md:border-b-8 border-blue-800 active:border-b-0 active:translate-y-2 transition-all uppercase flex items-center justify-center gap-4"
                         >
                           <span>NÄSTA</span> <span>➡</span>
                         </button>
