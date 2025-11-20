@@ -741,7 +741,7 @@ export default function App() {
                        <div className="absolute inset-0 flex items-center justify-center z-30">
                           <div className="relative bg-red-100 text-red-900 px-8 py-6 rounded-3xl font-bold text-xl border-4 border-red-300 shadow-2xl animate-shake bg-opacity-95 max-w-[90%] text-center">
                              <button 
-                               onClick={() => setFeedback({ type: null, msg: "" })}
+                               onClick={() => { setFeedback({ type: null, msg: "" }); setSelectedAnswerIndex(null); }}
                                className="absolute -top-3 -right-3 bg-red-500 text-white w-8 h-8 rounded-full border-2 border-white shadow-md flex items-center justify-center hover:scale-110 transition-transform"
                              >
                                ✕
@@ -749,7 +749,7 @@ export default function App() {
                              <div className="mb-2 text-3xl">🤔</div>
                              {feedback.msg}
                              <button 
-                                onClick={() => setFeedback({ type: null, msg: "" })}
+                                onClick={() => { setFeedback({ type: null, msg: "" }); setSelectedAnswerIndex(null); }}
                                 className="mt-4 block w-full bg-white text-red-800 text-sm py-2 rounded-xl border-2 border-red-200 hover:bg-red-50"
                              >
                                OK, FÖRSÖK IGEN
