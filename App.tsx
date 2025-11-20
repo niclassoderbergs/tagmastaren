@@ -59,6 +59,18 @@ const INITIAL_GAME_STATE: GameState = {
   currentStreak: 0,
 };
 
+// Helper for level labels
+const getLevelLabel = (level: number) => {
+  switch(level) {
+    case 1: return "FÖRSKOLEKLASS";
+    case 2: return "ÅRSKURS 1";
+    case 3: return "ÅRSKURS 2";
+    case 4: return "ÅRSKURS 3";
+    case 5: return "UTMANANDE";
+    default: return `NIVÅ ${level}`;
+  }
+};
+
 const MissionProgress = ({ current, target, compact }: { current: number, target: number, compact: boolean }) => (
   <div className={`flex items-center gap-2 justify-center bg-blue-50 rounded-full border border-blue-100 mx-auto w-fit transition-all ${compact ? 'py-1 px-3 mb-2' : 'py-3 px-6 mb-4'}`}>
     <span className={`text-blue-800 font-bold mr-2 ${compact ? 'text-xs' : 'text-sm'}`}>UPPDRAG:</span>
@@ -585,7 +597,7 @@ export default function App() {
                 className="group relative bg-white p-6 rounded-3xl shadow-lg hover:shadow-2xl border-b-8 border-blue-200 active:border-b-0 active:translate-y-2 transition-all duration-200 overflow-hidden"
               >
                 <div className="absolute top-0 right-0 bg-blue-100 px-3 py-1 rounded-bl-xl font-bold text-blue-800 text-xs">
-                   NIVÅ {settings.subjectDifficulty[subject]}
+                   {getLevelLabel(settings.subjectDifficulty[subject])}
                 </div>
                 <div className="text-6xl mb-4 group-hover:scale-110 transition-transform duration-300">
                   {subject === Subject.MATH && '🚂🔢'}
@@ -617,12 +629,14 @@ export default function App() {
           <div className="animate-slide-up relative">
             <MissionProgress current={missionProgress} target={MISSION_TARGET} compact={isMissionActive} />
             
-            <div className={`mb-2 md:mb-6`} onClick={handleSpeakQuestion}>
-               <Conductor 
-                 message={showExplanation ? currentQuestion?.explanation || "BRA JOBBAT!" : (currentQuestion?.text || "LADDAR...")} 
-                 mood={showExplanation ? 'happy' : 'thinking'} 
-               />
-            </div>
+            {!showExplanation && (
+                <div className={`mb-2 md:mb-6`} onClick={handleSpeakQuestion}>
+                <Conductor 
+                    message={currentQuestion?.text || "LADDAR..."} 
+                    mood={'thinking'} 
+                />
+                </div>
+            )}
 
             {loading || !currentQuestion ? (
               <div className="flex justify-center py-20">

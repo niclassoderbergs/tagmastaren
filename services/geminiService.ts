@@ -312,6 +312,8 @@ async function decodeAudioData(
 }
 
 export const playTextAsSpeech = async (text: string): Promise<void> => {
+  if (!apiKey) return;
+  
   if (!audioContext) {
     audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
   }
@@ -352,6 +354,7 @@ export const playTextAsSpeech = async (text: string): Promise<void> => {
 
 export const generateRewardImage = async (prompt: string): Promise<string | null> => {
   if (!prompt) return null;
+  if (!apiKey) return null;
 
   if (imageCache.has(prompt)) {
     const cached = imageCache.get(prompt);
@@ -412,6 +415,10 @@ const fetchFromAIAndSave = async (
   bannedTopics: string[]
 ): Promise<Question> => {
   
+  if (!apiKey) {
+      throw new Error("Ingen API-nyckel tillgänglig för AI-generering");
+  }
+
   const levelContext = difficulty === 1 
     ? "NIVÅ: FÖRSKOLEKLASS (Mycket enkelt). Använd enkla begrepp." 
     : `NIVÅ: ${difficulty} (1=Enkelt, 5=Svårt).`;
@@ -573,6 +580,11 @@ export const generateQuestion = async (
     } else {
       aiProbability = 0.05; // Maintenance mode (5% chance of new)
     }
+    
+    // SAFETY CHECK: If no API key is present, force Local DB usage.
+    if (!apiKey) {
+        aiProbability = 0;
+    }
 
     const rollDice = Math.random(); 
     const forceAI = rollDice < aiProbability;
@@ -582,6 +594,11 @@ export const generateQuestion = async (
       if (dbQuestion) {
         return { ...dbQuestion, id: crypto.randomUUID() };
       }
+    }
+    
+    // If we are here and have no API key, we must fallback because we can't generate.
+    if (!apiKey) {
+        throw new Error("Ingen API-nyckel och ingen fråga i databasen.");
     }
 
     const subTopics = SUB_TOPICS[subject];
@@ -613,6 +630,8 @@ export const generateQuestion = async (
 // --- AI DEDUPLICATION ---
 
 export const checkDuplicatesWithAI = async (questions: {id: string, text: string}[], context: string): Promise<string[]> => {
+  if (!apiKey) return [];
+  
   if (questions.length < 2) return [];
 
   const duplicateSchema: Schema = {
