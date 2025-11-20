@@ -540,22 +540,22 @@ export default function App() {
                    NIVÅ {settings.subjectDifficulty[subject]}
                 </div>
                 <div className="text-6xl mb-4 group-hover:scale-110 transition-transform duration-300">
-                  {subject === Subject.MATH && '🔢'}
-                  {subject === Subject.LANGUAGE && '🅰️'}
-                  {subject === Subject.LOGIC && '🧩'}
-                  {subject === Subject.PHYSICS && '🌍'}
+                  {subject === Subject.MATH && '🚂🔢'}
+                  {subject === Subject.LANGUAGE && '🚂🅰️'}
+                  {subject === Subject.LOGIC && '🚂🧩'}
+                  {subject === Subject.PHYSICS && '🚂⚡️'}
                 </div>
                 <h2 className="text-2xl font-black text-slate-700 uppercase tracking-wide">
-                  {subject === Subject.MATH && 'MATEMATIK'}
-                  {subject === Subject.LANGUAGE && 'SVENSKA'}
-                  {subject === Subject.LOGIC && 'LOGIK'}
-                  {subject === Subject.PHYSICS && 'TEKNIK & NATUR'}
+                  {subject === Subject.MATH && 'RÄKNETÅGET'}
+                  {subject === Subject.LANGUAGE && 'BOKSTAVSTÅGET'}
+                  {subject === Subject.LOGIC && 'KLURTÅGET'}
+                  {subject === Subject.PHYSICS && 'UPPTÄCKARTÅGET'}
                 </h2>
                 <p className="text-slate-400 font-bold text-sm mt-2">
                   {subject === Subject.MATH && 'Räkna och siffror'}
                   {subject === Subject.LANGUAGE && 'Ord och bokstäver'}
                   {subject === Subject.LOGIC && 'Klura och tänk'}
-                  {subject === Subject.PHYSICS && 'Hur saker funkar'}
+                  {subject === Subject.PHYSICS && 'Natur och teknik'}
                 </p>
               </button>
             ))}
