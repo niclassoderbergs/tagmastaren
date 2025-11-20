@@ -396,13 +396,21 @@ class TrainDB {
     await this.pruneImages(db);
 
     if (this.firestore) {
-        const safeId = encodeURIComponent(prompt); 
-        if (optimizedBase64.length <= 1040000) {
+        // Ensure key is safe and not too long for Firestore
+        const safeId = encodeURIComponent(prompt.slice(0, 256)); 
+        
+        // Firestore limit is ~1MB. Our optimized images should be much smaller (< 200KB).
+        if (optimizedBase64.length <= 1000000) {
+            console.log("Saving image to cloud: " + prompt.substring(0, 20) + "...");
             setDoc(doc(this.firestore, 'images', safeId), {
                 prompt: prompt,
                 base64: optimizedBase64,
                 timestamp: Date.now()
-            }, { merge: true }).catch(e => console.warn("Failed to save image to cloud", e));
+            }, { merge: true })
+            .then(() => console.log("Cloud save complete"))
+            .catch(e => console.warn("Failed to save image to cloud", e));
+        } else {
+            console.warn(`Image too large for Cloud (${optimizedBase64.length} bytes). Saved locally only.`);
         }
     }
 
@@ -584,7 +592,7 @@ class TrainDB {
                     console.warn("Compression failed during sync, trying original", err);
                 }
                 if (finalBase64.length > 1040000) continue; 
-                const safeId = encodeURIComponent(img.prompt);
+                const safeId = encodeURIComponent(img.prompt.slice(0, 256));
                 const docRef = doc(this.firestore!, 'images', safeId);
                 batch.set(docRef, {
                     prompt: img.prompt,

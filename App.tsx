@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Subject, Question, TrainCar, GameState, AppSettings, QuestionType } from './types';
 import { generateQuestion, generateRewardImage, playTextAsSpeech, markQuestionTooHard, removeBadImage } from './services/geminiService';
+import { trainDb } from './services/db';
 import { TrainViz } from './components/TrainViz';
 import { Conductor } from './components/Conductor';
 import { SettingsModal } from './components/SettingsModal';
@@ -165,6 +166,13 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('trainMasterState', JSON.stringify(gameState));
   }, [gameState]);
+
+  // INITIALIZE CLOUD DB ON MOUNT IF CONFIG EXISTS
+  useEffect(() => {
+    if (settings.firebaseConfig) {
+      trainDb.initCloud(settings.firebaseConfig);
+    }
+  }, [settings.firebaseConfig]);
 
   // --- MENU PRELOADING ---
   // Automatically load one question for each subject when in the menu
