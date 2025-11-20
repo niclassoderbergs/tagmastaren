@@ -521,6 +521,13 @@ export default function App() {
 
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
 
+      {/* MOBILE TRAIN (Top) - Sticky just below header */}
+      <div className="md:hidden sticky top-[72px] z-40 shadow-lg pointer-events-none">
+          <div className="pointer-events-auto">
+              <TrainViz cars={gameState.cars} />
+          </div>
+      </div>
+
       <main className="flex-1 p-4 max-w-3xl mx-auto w-full pb-32">
         
         {!selectedSubject ? (
@@ -681,8 +688,8 @@ export default function App() {
 
       </main>
 
-      {/* FIXED BOTTOM TRAIN */}
-      <div className="sticky bottom-0 z-40 shadow-2xl pointer-events-none">
+      {/* FIXED BOTTOM TRAIN (Desktop Only) */}
+      <div className="hidden md:block sticky bottom-0 z-40 shadow-2xl pointer-events-none">
         <div className="pointer-events-auto">
            <TrainViz cars={gameState.cars} />
         </div>

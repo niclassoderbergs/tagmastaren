@@ -74,21 +74,21 @@ export const TrainViz: React.FC<TrainVizProps> = ({ cars }) => {
   }, [cars.length]);
 
   return (
-    <div className="w-full bg-slate-800 border-t-4 border-b-4 border-slate-600 relative h-48 flex items-center overflow-hidden">
+    <div className="w-full bg-slate-800 border-t-2 md:border-t-4 border-b-2 md:border-b-4 border-slate-600 relative h-24 md:h-48 flex items-center overflow-hidden transition-all">
       {/* Background Scenery (Static for simplicity, but implies motion) */}
-      <div className="absolute top-4 left-10 w-16 h-16 bg-yellow-100 rounded-full opacity-20 blur-xl"></div>
+      <div className="absolute top-2 md:top-4 left-10 w-8 h-8 md:w-16 md:h-16 bg-yellow-100 rounded-full opacity-20 blur-xl"></div>
       
       <div 
         ref={scrollRef}
-        className="flex items-end pb-4 px-10 space-x-1 overflow-x-auto scroll-smooth w-full h-full no-scrollbar"
+        className="flex items-end pb-1 md:pb-4 px-4 md:px-10 space-x-1 overflow-x-auto scroll-smooth w-full h-full no-scrollbar"
         style={{ scrollBehavior: 'smooth' }}
       >
         {/* Tracks */}
-        <div className="absolute bottom-4 left-0 w-[2000px] h-2 bg-stone-400 z-0"></div>
+        <div className="absolute bottom-2 md:bottom-4 left-0 w-[2000px] h-1 md:h-2 bg-stone-400 z-0"></div>
 
         {/* Render Cars */}
         {cars.map((car, index) => (
-          <svg key={car.id} width="80" height="80" viewBox="0 0 80 70" className="flex-shrink-0 z-10">
+          <svg key={car.id} width="80" height="80" viewBox="0 0 80 70" className="flex-shrink-0 z-10 scale-90 md:scale-100 origin-bottom">
             {car.type === 'LOCOMOTIVE' && <Locomotive />}
             {car.type === 'PASSENGER' && <PassengerCar color={car.color} />}
             {car.type === 'CARGO' && <CargoCar color={car.color} />}
