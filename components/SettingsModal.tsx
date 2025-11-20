@@ -216,7 +216,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
         setTimeout(() => window.location.reload(), 2000); 
       } catch (error) {
         console.error(error);
-        setBackupStatus("Felaktig fil.");
+        setBackupStatus("Filen var felaktig.");
       }
     };
     reader.readAsText(file);
@@ -467,6 +467,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                       <button onClick={handleTestConnection} disabled={connectionStatus === 'testing'} className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg text-sm">
                           {connectionStatus === 'testing' ? "KONTROLLERAR..." : "SPARA & TESTA"}
                       </button>
+                      
+                      {connectionStatus === 'success' && <div className="text-green-600 text-xs font-bold">ANSLUTNING LYCKADES!</div>}
+                      {connectionStatus === 'error' && <div className="text-red-500 text-xs font-bold">ANSLUTNING MISSLYCKADES: {connectionErrorMsg}</div>}
+
                    </div>
                 </div>
 
@@ -497,6 +501,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ settings, onUpdate
                   )}
                   
                   <div className="grid grid-cols-2 gap-2">
+                    
+                    <label className="col-span-2 bg-white hover:bg-blue-50 text-blue-700 font-bold py-2 px-4 rounded-lg border-2 border-blue-200 text-xs shadow-sm cursor-pointer text-center flex items-center justify-center gap-2">
+                       📁 IMPORTERA BACKUP
+                       <input type="file" accept=".json" onChange={handleImport} className="hidden" />
+                    </label>
+                    <button onClick={handleExport} className="col-span-2 bg-white hover:bg-blue-50 text-blue-700 font-bold py-2 px-4 rounded-lg border-2 border-blue-200 text-xs shadow-sm">💾 EXPORTERA BACKUP</button>
+                    {backupStatus && <div className="col-span-2 text-center text-xs font-bold text-slate-500">{backupStatus}</div>}
+                    
+                    <div className="col-span-2 border-t border-indigo-200 my-2"></div>
+
                     <button onClick={handleCleanupLocal} className="col-span-2 bg-white hover:bg-red-50 text-red-700 font-bold py-2 px-4 rounded-lg border-2 border-red-200 text-xs shadow-sm">STÄDA DUBBLETTER (LOKALT)</button>
                   </div>
                 </div>
