@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Subject, Question, TrainCar, GameState, AppSettings, QuestionType } from './types';
 import { generateQuestion, generateRewardImage, playTextAsSpeech, markQuestionTooHard, removeBadImage } from './services/geminiService';

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 
 interface ShapeCardProps {
@@ -6,7 +7,7 @@ interface ShapeCardProps {
   children?: React.ReactNode;
 }
 
-const ShapeCard = ({ title, description, children }: ShapeCardProps) => (
+const ShapeCard: React.FC<ShapeCardProps> = ({ title, description, children }) => (
   <div className="flex flex-col items-center bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 shadow-sm hover:scale-105 transition-transform">
     <svg width="80" height="80" viewBox="0 0 100 100" className="mb-2 drop-shadow-md">
       {children}
@@ -16,20 +17,20 @@ const ShapeCard = ({ title, description, children }: ShapeCardProps) => (
   </div>
 );
 
-const ColorCard = ({ color, name }: { color: string, name: string }) => (
+const ColorCard: React.FC<{ color: string, name: string }> = ({ color, name }) => (
   <div className="flex flex-col items-center bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 shadow-sm hover:scale-105 transition-transform">
     <div className={`w-16 h-16 rounded-full shadow-inner mb-3 ${color}`}></div>
     <span className="text-lg font-black text-slate-700 uppercase">{name}</span>
   </div>
 );
 
-const NumberCard = ({ num }: { num: number }) => (
+const NumberCard: React.FC<{ num: number }> = ({ num }) => (
   <div className="flex flex-col items-center bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 shadow-sm hover:scale-105 transition-transform aspect-square justify-center">
     <span className="text-6xl font-black text-blue-600 drop-shadow-sm">{num}</span>
   </div>
 );
 
-const LetterCard = ({ char }: { char: string }) => (
+const LetterCard: React.FC<{ char: string }> = ({ char }) => (
   <div className="flex flex-col items-center bg-slate-50 p-3 rounded-xl border-2 border-slate-100 shadow-sm hover:scale-105 transition-transform">
     <div className="flex items-baseline gap-2">
       <span className="text-4xl font-black text-slate-800">{char}</span>
