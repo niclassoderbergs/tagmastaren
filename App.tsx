@@ -121,6 +121,7 @@ export default function App() {
   
   // QUEUE SYSTEM
   const [questionBuffer, setQuestionBuffer] = useState<Question[]>([]);
+  const [preloadedQuestions, setPreloadedQuestions] = useState<Partial<Record<Subject, Question>>>({});
   const fetchingCountRef = useRef(0); // Tracks active API calls to prevent over-fetching
   
   // DRAG DROP FREQUENCY CONTROL
@@ -151,6 +152,49 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('trainMasterState', JSON.stringify(gameState));
   }, [gameState]);
+
+  // --- MENU PRELOADING ---
+  // Automatically load one question for each subject when in the menu
+  useEffect(() => {
+    if (selectedSubject) return; // Don't preload menu items while playing a game
+
+    const preloadMenuQuestions = async () => {
+       const subjects = Object.keys(settings.subjectDifficulty) as Subject[];
+       
+       for (const subj of subjects) {
+          // If we already have a preloaded question for this subject, skip
+          if (preloadedQuestions[subj]) continue;
+
+          try {
+             const difficulty = settings.subjectDifficulty[subj];
+             const carCount = gameState.cars.length;
+             const banList = settings.enableBannedTopics ? settings.bannedTopics : [];
+
+             // Generate in background
+             const q = await generateQuestion(subj, difficulty, settings.useDigits, carCount, undefined, banList, true);
+             
+             // Start generating image if needed so it's ready too
+             if (q.visualSubject) {
+                generateRewardImage(q.visualSubject).then(url => {
+                   if (url) {
+                      q.preloadedImageUrl = url;
+                      // Update state again with image
+                      setPreloadedQuestions(prev => ({ ...prev, [subj]: q }));
+                   }
+                });
+             }
+
+             // Save to state immediately (image might come later)
+             setPreloadedQuestions(prev => ({ ...prev, [subj]: q }));
+          } catch (e) {
+             console.warn("Background preload failed for " + subj, e);
+          }
+       }
+    };
+
+    preloadMenuQuestions();
+  }, [selectedSubject, preloadedQuestions, settings]);
+
 
   // --- BUFFER MANAGEMENT ---
 
@@ -344,30 +388,61 @@ export default function App() {
     setPreloadedRewardImage(null);
     setSelectedAnswerIndex(null);
     
-    setLoading(true);
+    // CHECK PRELOAD BUFFER FIRST
+    const preloadedQ = preloadedQuestions[subject];
     
-    // Fetch the FIRST question directly 
-    const difficulty = settings.subjectDifficulty[subject];
-    const carCount = gameState.cars.length;
-    const banList = settings.enableBannedTopics ? settings.bannedTopics : [];
-    
-    // For the very first question, we allow DragDrop logic to apply normally
-    // BUT, we set allowDragDrop to true initially.
-    const firstQuestion = await generateQuestion(subject, difficulty, settings.useDigits, carCount, undefined, banList, true);
-    
-    // If the FIRST question is DnD, mark it immediately
-    if (firstQuestion.type === 'DRAG_AND_DROP') {
-      setHasDragDropOccurred(true);
-    }
+    if (preloadedQ) {
+      // FAST START
+      console.log("Using preloaded question for instant start");
+      
+      // 1. Set the question
+      setCurrentQuestion(preloadedQ);
+      
+      // 2. Setup state if it's a DnD question
+      if (preloadedQ.type === 'DRAG_AND_DROP') {
+        setHasDragDropOccurred(true);
+      }
+      
+      // 3. Load image if available
+      if (preloadedQ.preloadedImageUrl) {
+        setPreloadedRewardImage(preloadedQ.preloadedImageUrl);
+      }
 
-    setCurrentQuestion(firstQuestion);
-    setLoading(false);
-    
-    // Start filling buffer
-    if (firstQuestion.visualSubject) {
-       generateRewardImage(firstQuestion.visualSubject).then(url => {
-         if (url) setPreloadedRewardImage(url);
-       });
+      // 4. Clear from preload buffer (consume it)
+      setPreloadedQuestions(prev => {
+         const copy = { ...prev };
+         delete copy[subject];
+         return copy;
+      });
+      
+      // 5. Start filling the regular buffer
+      ensureBufferFilled(subject);
+
+    } else {
+      // SLOW START (Fallback)
+      setLoading(true);
+      
+      const difficulty = settings.subjectDifficulty[subject];
+      const carCount = gameState.cars.length;
+      const banList = settings.enableBannedTopics ? settings.bannedTopics : [];
+      
+      const firstQuestion = await generateQuestion(subject, difficulty, settings.useDigits, carCount, undefined, banList, true);
+      
+      if (firstQuestion.type === 'DRAG_AND_DROP') {
+        setHasDragDropOccurred(true);
+      }
+
+      setCurrentQuestion(firstQuestion);
+      setLoading(false);
+      
+      if (firstQuestion.visualSubject) {
+         generateRewardImage(firstQuestion.visualSubject).then(url => {
+           if (url) setPreloadedRewardImage(url);
+         });
+      }
+      
+      // Start filling buffer
+      ensureBufferFilled(subject);
     }
   };
 
@@ -530,6 +605,10 @@ export default function App() {
                   {subject === Subject.LOGIC && 'Klura och tänk'}
                   {subject === Subject.PHYSICS && 'Natur och teknik'}
                 </p>
+                {/* Preload Status Indicator (Subtle) */}
+                {preloadedQuestions[subject] && (
+                    <div className="absolute bottom-2 right-2 w-3 h-3 bg-green-400 rounded-full animate-pulse shadow-md" title="Snabbstart redo"></div>
+                )}
               </button>
             ))}
           </div>
@@ -580,7 +659,7 @@ export default function App() {
                                   onClick={() => !showExplanation && handleAnswer(index)}
                                   disabled={showExplanation}
                                   className={`
-                                    p-3 md:p-6 rounded-xl md:rounded-2xl border-b-4 md:border-b-8 text-lg md:text-2xl font-bold transition-all duration-200
+                                    p-3 md:p-6 rounded-xl md:rounded-2xl border-b-4 md:border-b-8 text-xl md:text-2xl font-bold transition-all duration-200
                                     flex items-center justify-center text-center min-h-[60px] md:min-h-[100px]
                                     ${btnClass}
                                     active:border-b-0 active:translate-y-1 md:active:translate-y-2 shadow-sm
@@ -611,7 +690,7 @@ export default function App() {
                                       <img 
                                         src={preloadedRewardImage} 
                                         alt="Reward" 
-                                        className="w-full max-h-[25vh] md:max-h-[40vh] object-contain rounded-xl bg-slate-50" 
+                                        className="w-full max-h-[25vh] object-contain rounded-xl bg-slate-50" 
                                       />
                                       <button 
                                         onClick={(e) => { e.stopPropagation(); handleReportBadImage(); }}
@@ -627,14 +706,14 @@ export default function App() {
                                       <span className="text-sm font-bold mt-2">MÅLAR BILD...</span>
                                    </div>
                                  )}
-                                 <p className="text-center text-slate-700 text-sm font-bold mt-2 uppercase leading-tight">{currentQuestion.explanation}</p>
+                                 <p className="text-center text-slate-800 text-base md:text-lg font-bold mt-2 uppercase leading-tight">{currentQuestion.explanation}</p>
                               </div>
                            )}
 
                            {/* NEXT BUTTON */}
                            <button 
                               onClick={handleNext}
-                              className="w-full max-w-sm bg-blue-600 hover:bg-blue-500 text-white py-3 text-xl md:py-4 md:text-2xl font-black rounded-3xl shadow-xl border-b-8 border-blue-800 active:border-b-0 active:translate-y-2 transition-all uppercase flex items-center justify-center gap-4"
+                              className="w-full max-w-sm bg-blue-600 hover:bg-blue-500 text-white py-3 text-xl font-black rounded-3xl shadow-xl border-b-8 border-blue-800 active:border-b-0 active:translate-y-2 transition-all uppercase flex items-center justify-center gap-4"
                             >
                               <span>NÄSTA</span> <span>➡</span>
                            </button>
