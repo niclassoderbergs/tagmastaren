@@ -596,7 +596,7 @@ export default function App() {
 
                     {/* LAYER 2: RESULT OVERLAY (Absolute on top of Layer 1) */}
                     {(showExplanation && feedback.type === 'success') && (
-                       <div className="col-start-1 row-start-1 z-20 flex flex-col items-center justify-center gap-4 p-2 animate-fade-in">
+                       <div className="col-start-1 row-start-1 z-20 flex flex-col items-center justify-center gap-2 md:gap-4 p-2 animate-fade-in">
                            
                            {/* Success Message Badge */}
                            <div className="bg-green-100 text-green-800 px-6 py-2 rounded-full font-black text-xl shadow-lg border-2 border-green-200 animate-bounce">
@@ -611,7 +611,7 @@ export default function App() {
                                       <img 
                                         src={preloadedRewardImage} 
                                         alt="Reward" 
-                                        className="w-full max-h-[40vh] object-contain rounded-xl bg-slate-50" 
+                                        className="w-full max-h-[25vh] md:max-h-[40vh] object-contain rounded-xl bg-slate-50" 
                                       />
                                       <button 
                                         onClick={(e) => { e.stopPropagation(); handleReportBadImage(); }}
@@ -634,7 +634,7 @@ export default function App() {
                            {/* NEXT BUTTON */}
                            <button 
                               onClick={handleNext}
-                              className="w-full max-w-sm bg-blue-600 hover:bg-blue-500 text-white text-2xl font-black py-4 rounded-3xl shadow-xl border-b-8 border-blue-800 active:border-b-0 active:translate-y-2 transition-all uppercase flex items-center justify-center gap-4"
+                              className="w-full max-w-sm bg-blue-600 hover:bg-blue-500 text-white py-3 text-xl md:py-4 md:text-2xl font-black rounded-3xl shadow-xl border-b-8 border-blue-800 active:border-b-0 active:translate-y-2 transition-all uppercase flex items-center justify-center gap-4"
                             >
                               <span>NÄSTA</span> <span>➡</span>
                            </button>
