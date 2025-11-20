@@ -627,7 +627,7 @@ export default function App() {
                                       <span className="text-sm font-bold mt-2">MÅLAR BILD...</span>
                                    </div>
                                  )}
-                                 <p className="text-center text-slate-400 text-xs font-bold mt-2 uppercase">{currentQuestion.visualSubject}</p>
+                                 <p className="text-center text-slate-700 text-sm font-bold mt-2 uppercase leading-tight">{currentQuestion.explanation}</p>
                               </div>
                            )}
 

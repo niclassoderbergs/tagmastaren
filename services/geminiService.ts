@@ -420,34 +420,26 @@ const fetchFromAIAndSave = async (
     ? "ANVÄND SIFFROR (1, 2, 3) ISTÄLLET FÖR BOKSTÄVER FÖR ALLA TAL."
     : "ANVÄND BOKSTÄVER (ETT, TVÅ, TRE) FÖR ENKLA TAL.";
 
-  let promptContext = "";
-  switch (subject) {
-    case Subject.MATH:
-      promptContext = `Matematik. FOKUS: ${specificFocus}. VIKTIGT: VARIERA TEMAT (Sport, Mat, Djur, Rymden).`;
-      break;
-    case Subject.LANGUAGE:
-      promptContext = `Svenska språket. FOKUS: ${specificFocus}. VIKTIGT: VARIERA TEMAT.`;
-      break;
-    case Subject.LOGIC:
-      promptContext = `Logik. FOKUS: ${specificFocus}. VIKTIGT: VARIERA TEMAT.`;
-      break;
-    case Subject.PHYSICS:
-      promptContext = `Natur och Teknik. FOKUS: ${specificFocus}. VIKTIGT: VARIERA TEMAT.`;
-      break;
-  }
-
   let banInstruction = "";
   if (bannedTopics && bannedTopics.length > 0) {
       banInstruction = `- UNDVIK DESSA ÄMNEN HELT (De förekommer för ofta): ${bannedTopics.join(', ')}.`;
   }
 
   const prompt = `
-    Du ska skapa en quiz-fråga för en 6-årig pojke.
+    Du är en legitimerad svensk lärare med examen inriktad mot denna nivå.
+    Du är expert på särbegåvning och specialpedagogik.
+    
+    Din uppgift är att skapa en pedagogisk quiz-fråga för en 6-årig pojke.
+    
     Instruktioner:
     1. Ämne: ${subject}.
     2. ${levelContext}
     3. FOKUS: ${specificFocus}.
     4. SPRÅK: Svenska, VERSALER.
+       VIKTIGT: Språket måste vara grammatiskt perfekt. 
+       - Var extremt noga med substantivens genus (EN/ETT). 
+       - Exempel: Det heter "ETT RÖTT ÄPPLE", aldrig "En röd äpple".
+       - Adjektiv måste böjas korrekt efter substantivet.
     5. ${numberFormattingRule}
     6. REGLER FÖR VARIATION:
        ${banInstruction}
