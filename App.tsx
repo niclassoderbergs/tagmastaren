@@ -101,6 +101,7 @@ export default function App() {
       const parsed = JSON.parse(saved);
       return { 
         ...DEFAULT_SETTINGS, 
+        ...DEFAULT_SETTINGS, 
         ...parsed, 
         subjectDifficulty: { ...DEFAULT_SETTINGS.subjectDifficulty, ...parsed.subjectDifficulty },
         // Ensure new fields exist if loading old settings
@@ -138,11 +139,6 @@ export default function App() {
   // Audio State
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
-  // SCROLL REFS
-  const rewardSectionRef = useRef<HTMLDivElement>(null);
-  const questionCardRef = useRef<HTMLDivElement>(null);
-  const questionTopRef = useRef<HTMLDivElement>(null);
-
   // Determine if we are in active gameplay to condense the UI
   const isMissionActive = !!selectedSubject;
 
@@ -155,51 +151,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('trainMasterState', JSON.stringify(gameState));
   }, [gameState]);
-
-  // --- AUTO SCROLL EFFECTS ---
-
-  // 1. Scroll to Question when loaded (skipping Conductor)
-  useEffect(() => {
-    if (currentQuestion && !showExplanation && !loading) {
-      // Small delay to ensure DOM is ready
-      setTimeout(() => {
-        if (currentQuestion.type === 'DRAG_AND_DROP') {
-          // For DragDrop, we let the component handle its own internal scrolling to the "Mission" box
-          return;
-        }
-        if (questionTopRef.current) {
-          // Scroll so the question card top is near the top of the viewport
-          const yOffset = -20; // Keep a tiny bit of margin
-          const element = questionTopRef.current;
-          const y = element.getBoundingClientRect().top + window.scrollY + yOffset;
-          window.scrollTo({ top: y, behavior: 'smooth' });
-        }
-      }, 100);
-    }
-  }, [currentQuestion, showExplanation, loading]);
-
-  // 2. Scroll to Reward Image when it appears
-  useEffect(() => {
-    if (feedback.type === 'success' && (isGeneratingImage || preloadedRewardImage) && rewardSectionRef.current) {
-      setTimeout(() => {
-         const element = rewardSectionRef.current;
-         if (element) {
-             // Increased offset to show more context above the image (approx 150px margin from element top)
-             const offset = 150; 
-             const bodyRect = document.body.getBoundingClientRect().top;
-             const elementRect = element.getBoundingClientRect().top;
-             const elementPosition = elementRect - bodyRect;
-             const offsetPosition = elementPosition - offset;
-             
-             window.scrollTo({
-                 top: offsetPosition,
-                 behavior: "smooth"
-             });
-         }
-      }, 150); 
-    }
-  }, [feedback.type, isGeneratingImage, preloadedRewardImage]);
-
 
   // --- BUFFER MANAGEMENT ---
 
@@ -600,101 +551,107 @@ export default function App() {
                 <p className="sr-only">Laddar...</p>
               </div>
             ) : (
-              <div ref={questionCardRef} className="space-y-4 md:space-y-6">
+              <div className="space-y-4 md:space-y-6">
                  
-                 <div ref={questionTopRef}></div>
+                 {/* GAME AREA GRID: Stacked Layout for Overlay Effect */}
+                 <div className="grid grid-cols-1 relative min-h-[300px]">
+                    
+                    {/* LAYER 1: QUESTION CONTENT (Options or DragDrop) */}
+                    <div className={`col-start-1 row-start-1 transition-all duration-500 ease-in-out ${showExplanation ? 'opacity-10 blur-sm grayscale pointer-events-none' : 'opacity-100'}`}>
+                      {currentQuestion.type === 'DRAG_AND_DROP' && currentQuestion.dragDropConfig ? (
+                          <div className="bg-white p-2 md:p-4 rounded-3xl shadow-xl border-4 border-blue-100">
+                            <DragDropChallenge 
+                              config={currentQuestion.dragDropConfig} 
+                              onComplete={handleDragDropComplete}
+                            />
+                          </div>
+                      ) : (
+                          <div className="grid grid-cols-1 gap-3 md:gap-4">
+                            {currentQuestion.options?.map((option, index) => {
+                              // Simple highlight for selected, but mostly rely on the overlay for result
+                              let btnClass = "bg-white hover:bg-blue-50 border-slate-200 text-slate-700"; 
+                              if (selectedAnswerIndex === index) {
+                                btnClass = "bg-blue-100 border-blue-400 text-blue-900";
+                              }
 
-                 {currentQuestion.type === 'DRAG_AND_DROP' && currentQuestion.dragDropConfig ? (
-                    <div className="bg-white p-2 md:p-4 rounded-3xl shadow-xl border-4 border-blue-100">
-                       <DragDropChallenge 
-                         config={currentQuestion.dragDropConfig} 
-                         onComplete={handleDragDropComplete}
-                       />
-                    </div>
-                 ) : (
-                    <div className="grid grid-cols-1 gap-3 md:gap-4">
-                      {currentQuestion.options?.map((option, index) => {
-                        // Determine style based on selection state
-                        let btnClass = "bg-white hover:bg-blue-50 border-slate-200 text-slate-700"; // Default
-                        
-                        // If we are in "Explanation Mode" (Question answered correctly)
-                        if (showExplanation) {
-                           if (index === currentQuestion.correctAnswerIndex) {
-                             btnClass = "bg-green-100 border-green-500 text-green-900 scale-105 shadow-lg ring-4 ring-green-200/50";
-                           } else if (index === selectedAnswerIndex) {
-                             btnClass = "bg-red-100 border-red-300 text-red-900 opacity-60"; // Wrong answer selected
-                           } else {
-                             btnClass = "bg-slate-50 border-slate-100 text-slate-300 opacity-40"; // Others
-                           }
-                        } else if (selectedAnswerIndex === index) {
-                           // Just clicked, checking... (Brief moment before success/error logic updates)
-                           // Or if we want to show 'selected' state for incorrect attempt
-                           btnClass = "bg-blue-100 border-blue-400 text-blue-900";
-                        }
-
-                        return (
-                          <button
-                            key={index}
-                            onClick={() => !showExplanation && handleAnswer(index)}
-                            disabled={showExplanation}
-                            className={`
-                              p-3 md:p-6 rounded-xl md:rounded-2xl border-b-4 md:border-b-8 text-lg md:text-2xl font-bold transition-all duration-200
-                              flex items-center justify-center text-center min-h-[60px] md:min-h-[100px]
-                              ${btnClass}
-                              ${!showExplanation ? 'active:border-b-0 active:translate-y-1 md:active:translate-y-2 shadow-sm' : ''}
-                            `}
-                          >
-                            {option}
-                          </button>
-                        );
-                      })}
-                    </div>
-                 )}
-
-                 {/* FEEDBACK & NEXT BUTTON */}
-                 {(feedback.msg || showExplanation) && (
-                   <div className="animate-bounce-in space-y-4 md:space-y-6">
-                      
-                      <div className={`p-3 md:p-4 rounded-xl text-center font-black text-lg md:text-xl ${
-                        feedback.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
-                      }`}>
-                        {feedback.msg}
-                      </div>
-
-                      {/* REWARD IMAGE */}
-                      {feedback.type === 'success' && currentQuestion.visualSubject && (
-                        <div ref={rewardSectionRef} className="bg-white p-2 rounded-3xl shadow-lg border-4 border-yellow-200 rotate-1 overflow-hidden">
-                           {preloadedRewardImage ? (
-                             <div className="relative">
-                                <img src={preloadedRewardImage} alt="Reward" className="w-full h-64 object-contain rounded-xl" />
-                                <button 
-                                  onClick={(e) => { e.stopPropagation(); handleReportBadImage(); }}
-                                  className="absolute top-2 right-2 bg-white/80 hover:bg-red-100 text-red-600 p-1 rounded-full text-xs font-bold border border-red-200 shadow-sm z-10"
-                                  title="Rapportera konstig bild"
+                              return (
+                                <button
+                                  key={index}
+                                  onClick={() => !showExplanation && handleAnswer(index)}
+                                  disabled={showExplanation}
+                                  className={`
+                                    p-3 md:p-6 rounded-xl md:rounded-2xl border-b-4 md:border-b-8 text-lg md:text-2xl font-bold transition-all duration-200
+                                    flex items-center justify-center text-center min-h-[60px] md:min-h-[100px]
+                                    ${btnClass}
+                                    active:border-b-0 active:translate-y-1 md:active:translate-y-2 shadow-sm
+                                  `}
                                 >
-                                  RAPPORTERA 🚩
+                                  {option}
                                 </button>
-                             </div>
-                           ) : (
-                             <div className="h-64 flex flex-col items-center justify-center text-slate-300 bg-slate-50 rounded-xl">
-                                <span className="text-4xl animate-bounce">🎨</span>
-                                <span className="text-sm font-bold mt-2">MÅLAR BILD...</span>
-                             </div>
-                           )}
-                           <p className="text-center text-slate-400 text-xs font-bold mt-2 uppercase">{currentQuestion.visualSubject}</p>
-                        </div>
+                              );
+                            })}
+                          </div>
                       )}
+                    </div>
 
-                      {feedback.type === 'success' && (
-                        <button 
-                          onClick={handleNext}
-                          className="w-full bg-blue-600 hover:bg-blue-500 text-white text-2xl md:text-3xl font-black py-4 md:py-6 rounded-3xl shadow-xl border-b-4 md:border-b-8 border-blue-800 active:border-b-0 active:translate-y-2 transition-all uppercase flex items-center justify-center gap-4"
-                        >
-                          <span>NÄSTA</span> <span>➡</span>
-                        </button>
-                      )}
-                   </div>
-                 )}
+                    {/* LAYER 2: RESULT OVERLAY (Absolute on top of Layer 1) */}
+                    {(showExplanation && feedback.type === 'success') && (
+                       <div className="col-start-1 row-start-1 z-20 flex flex-col items-center justify-center gap-4 p-2 animate-fade-in">
+                           
+                           {/* Success Message Badge */}
+                           <div className="bg-green-100 text-green-800 px-6 py-2 rounded-full font-black text-xl shadow-lg border-2 border-green-200 animate-bounce">
+                             RÄTT SVAR!
+                           </div>
+
+                           {/* REWARD CARD */}
+                           {currentQuestion.visualSubject && (
+                              <div className="bg-white p-2 rounded-3xl shadow-2xl border-4 border-yellow-200 rotate-1 w-full max-w-sm">
+                                 {preloadedRewardImage ? (
+                                   <div className="relative">
+                                      <img 
+                                        src={preloadedRewardImage} 
+                                        alt="Reward" 
+                                        className="w-full max-h-[40vh] object-contain rounded-xl bg-slate-50" 
+                                      />
+                                      <button 
+                                        onClick={(e) => { e.stopPropagation(); handleReportBadImage(); }}
+                                        className="absolute top-2 right-2 bg-white/80 hover:bg-red-100 text-red-600 p-1 rounded-full text-xs font-bold border border-red-200 shadow-sm z-10"
+                                        title="Rapportera konstig bild"
+                                      >
+                                        🚩
+                                      </button>
+                                   </div>
+                                 ) : (
+                                   <div className="h-48 flex flex-col items-center justify-center text-slate-300 bg-slate-50 rounded-xl">
+                                      <span className="text-4xl animate-bounce">🎨</span>
+                                      <span className="text-sm font-bold mt-2">MÅLAR BILD...</span>
+                                   </div>
+                                 )}
+                                 <p className="text-center text-slate-400 text-xs font-bold mt-2 uppercase">{currentQuestion.visualSubject}</p>
+                              </div>
+                           )}
+
+                           {/* NEXT BUTTON */}
+                           <button 
+                              onClick={handleNext}
+                              className="w-full max-w-sm bg-blue-600 hover:bg-blue-500 text-white text-2xl font-black py-4 rounded-3xl shadow-xl border-b-8 border-blue-800 active:border-b-0 active:translate-y-2 transition-all uppercase flex items-center justify-center gap-4"
+                            >
+                              <span>NÄSTA</span> <span>➡</span>
+                           </button>
+
+                       </div>
+                    )}
+                    
+                    {/* Error Feedback Overlay (Optional simple toast) */}
+                    {(feedback.type === 'error') && (
+                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
+                          <div className="bg-red-100 text-red-800 px-6 py-4 rounded-2xl font-bold text-xl border-4 border-red-200 shadow-xl animate-shake bg-opacity-95">
+                             {feedback.msg}
+                          </div>
+                       </div>
+                    )}
+
+                 </div>
 
               </div>
             )}
